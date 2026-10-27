@@ -507,12 +507,14 @@ fn write_summary_report_to<W: Write + ?Sized>(
         "# input alignment file:             {}",
         args.msafile.display()
     )?;
-    if (args.alirange.is_some() || args.modelrange.is_some()) && args.outfile.is_some() {
-        writeln!(
-            out,
-            "# output alignment file:            {}",
-            args.outfile.as_ref().unwrap().display()
-        )?;
+    if let Some(outfile) = args.outfile.as_ref() {
+        if args.alirange.is_some() || args.modelrange.is_some() {
+            writeln!(
+                out,
+                "# output alignment file:            {}",
+                outfile.display()
+            )?;
+        }
     }
     if let Some(ref range) = args.alirange {
         writeln!(out, "# alignment range:                  {range}")?;

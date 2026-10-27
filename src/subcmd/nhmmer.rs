@@ -1110,21 +1110,11 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
     {
         writeln!(out, "# target format asserted:          fmindex").unwrap();
     }
-    if args.tblout.is_some() {
-        writeln!(
-            out,
-            "# hits tabular output:             {}",
-            args.tblout.as_ref().unwrap().display()
-        )
-        .unwrap();
+    if let Some(path) = &args.tblout {
+        writeln!(out, "# hits tabular output:             {}", path.display()).unwrap();
     }
-    if args.dfamtblout.is_some() {
-        writeln!(
-            out,
-            "# hits output in Dfam format:      {}",
-            args.dfamtblout.as_ref().unwrap().display()
-        )
-        .unwrap();
+    if let Some(path) = &args.dfamtblout {
+        writeln!(out, "# hits output in Dfam format:      {}", path.display()).unwrap();
     }
     if let Some(path) = &args.ali_outfile {
         writeln!(out, "# MSA of all hits saved to file:   {}", path.display()).unwrap();
@@ -1478,7 +1468,7 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
         let effective_block_length = args.block_length.unwrap_or(NHMMER_DEFAULT_BLOCK_LENGTH);
         let fm_window_cache = precompute_c_faithful_fm_windows(
             &target_db,
-            &sequences,
+            sequences,
             hmm,
             &bg,
             max_length,
@@ -3603,12 +3593,14 @@ fn validate_makehmmerdb_index_records(
     Ok(())
 }
 
+type FmIndexRecords = (Vec<NhmmerFmIndexRecord>, Vec<Arc<[u8]>>);
+
 fn build_raw_c_stream_fm_index_records(
     records_by_block: &mut [NhmmerFmRecord],
     reverse_records_by_block: &mut [Option<NhmmerFmRecord>],
     fwd_only: bool,
     mapped_bytes: Option<Arc<MmapBytes>>,
-) -> Result<(Vec<NhmmerFmIndexRecord>, Vec<Arc<[u8]>>), String> {
+) -> Result<FmIndexRecords, String> {
     let record_passes = if fwd_only { 1 } else { 2 };
     let mut records = Vec::with_capacity(records_by_block.len() * record_passes);
     let mut block_texts = Vec::with_capacity(records_by_block.len());
@@ -4238,7 +4230,7 @@ fn fm_convert_range_to_dsq(
             dsq[j] = a;
         }
         if last % 2 == 1 {
-            let mid = (last + 1) / 2;
+            let mid = last.div_ceil(2);
             dsq[mid] = complement_dna_dsq(dsq[mid]);
         }
     }
@@ -4267,7 +4259,7 @@ fn fm_compute_sequence_offset(
         return Some(hi);
     }
     loop {
-        let mid = (lo + hi + 1) / 2;
+        let mid = (lo + hi).div_ceil(2);
         if seq_meta[mid].fm_start <= pos {
             lo = mid;
         } else if mid == 0 || seq_meta[mid - 1].fm_start > pos {

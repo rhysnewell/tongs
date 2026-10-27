@@ -46,14 +46,14 @@ pub fn seqmodel(
     let k = abc.k;
     let mut hmm = Hmm::new(m, abc.abc_type, k);
 
-    for node in 0..=m {
+    for (node, &code) in dsq.iter().enumerate().take(m + 1) {
         // Use rows of P matrix as source of match emission vectors.
         // C: esl_vec_D2F(Q->mx[(int) dsq[k]], abc->K, hmm->mat[k]).
         if node > 0 {
-            let residue = dsq[node] as usize;
+            let residue = code as usize;
             if residue < q.len() {
-                for x in 0..k {
-                    hmm.mat[node][x] = q[residue][x] as f32;
+                for (mat, &p) in hmm.mat[node][..k].iter_mut().zip(&q[residue][..k]) {
+                    *mat = p as f32;
                 }
             } else {
                 // Not reachable for a validly digitized sequence; every digital

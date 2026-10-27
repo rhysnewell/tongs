@@ -807,7 +807,7 @@ pub fn fm_extend_seed_core(
 
     while k <= model_end {
         let abs_idx = (target_start + n as i64) as usize;
-        let cidx = (k as usize) * kp + target[abs_idx] as usize;
+        let cidx = (k as usize) * kp + target[abs_idx];
         let delta = scores.scores[cidx];
         sc += delta;
         if sc < 0.0 {

@@ -85,8 +85,8 @@ pub fn get_ssv_score_array(om: &OProfile) -> Vec<u8> {
     let mut arr = vec![0u8; cell_cnt];
 
     for x in 0..kp {
-        let mut k = 1;
         for q in 0..nq {
+            let k = q + 1;
             let vec = &om.rbv[x][q];
             for z in 0..16 {
                 let idx = kp * (k + z * nq) + x;
@@ -94,7 +94,6 @@ pub fn get_ssv_score_array(om: &OProfile) -> Vec<u8> {
                     arr[idx] = vec[z];
                 }
             }
-            k += 1;
         }
     }
     arr

@@ -77,10 +77,12 @@ pub fn pb_weights(msa: &Msa, abc: &Alphabet, ignore_rf: bool) -> Vec<f64> {
     // Determine consensus columns early if we can. RF takes priority; else, on
     // a deep alignment, sample to determine consensus (esl_msaweight.c:205-207).
     // ncons stays 0 if neither path is used or the sample is rejected.
-    if !ignore_rf && msa.rf.is_some() {
-        consensus_by_rf(msa.rf.as_ref().unwrap(), abc, alen, &mut conscols);
-    } else if PB_ALLOW_SAMP && nseq > PB_SAMPTHRESH {
-        consensus_by_sample(&ax, abc, alen, nseq, &mut ct, &mut conscols);
+    match msa.rf.as_ref().filter(|_| !ignore_rf) {
+        Some(rf) => consensus_by_rf(rf, abc, alen, &mut conscols),
+        None if PB_ALLOW_SAMP && nseq > PB_SAMPTHRESH => {
+            consensus_by_sample(&ax, abc, alen, nseq, &mut ct, &mut conscols)
+        }
+        None => {}
     }
 
     // Collect count matrix (over all columns, or only consensus columns if

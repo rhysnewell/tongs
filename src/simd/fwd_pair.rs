@@ -168,8 +168,8 @@ unsafe fn row<const N: usize>(om: &OProfile, lanes: [&mut Parse; N], i: usize) {
         let mut open = [true; N];
         for _ in 0..3 {
             let mut cv = [zerov; N];
-            for t in 0..N {
-                dcv[t] = rightshift_float(dcv[t]);
+            for v in dcv.iter_mut() {
+                *v = rightshift_float(*v);
             }
             for q in 0..q_count {
                 let tdd = _mm_load_ps((*dd.add(q)).as_ptr());

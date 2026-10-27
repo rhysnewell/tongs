@@ -289,7 +289,7 @@ impl RegularSaSamples {
     fn position_for_row(&self, row: usize) -> Option<usize> {
         match self {
             RegularSaSamples::InMemory { positions, freq_sa } => {
-                if row % *freq_sa != 0 {
+                if !row.is_multiple_of(*freq_sa) {
                     return None;
                 }
                 positions.get(row / *freq_sa).map(|&pos| pos as usize)
@@ -301,7 +301,7 @@ impl RegularSaSamples {
                 freq_sa,
                 text_len,
             } => {
-                if row % *freq_sa != 0 {
+                if !row.is_multiple_of(*freq_sa) {
                     return None;
                 }
                 let idx = row / *freq_sa;
@@ -559,13 +559,12 @@ impl FmIndex {
             .sa
             .iter()
             .enumerate()
-            .filter_map(|(row, &pos)| {
-                (row % sample_rate == 0).then(|| {
-                    (
-                        i32::try_from(row).expect("FM-index row exceeds i32 range"),
-                        pos,
-                    )
-                })
+            .filter(|(row, _)| row.is_multiple_of(sample_rate))
+            .map(|(row, &pos)| {
+                (
+                    i32::try_from(row).expect("FM-index row exceeds i32 range"),
+                    pos,
+                )
             })
             .collect();
         index.regular_sa_samples = None;
@@ -673,14 +672,14 @@ impl FmIndex {
             .as_slice()
             .get(raw_sa_offset..raw_sa_offset + raw_sa_bytes)
             .ok_or_else(|| "FM-index suffix-array samples are outside mapped file".to_string())?;
-        for (idx, chunk) in slice.chunks_exact(4).enumerate() {
+        for (idx, chunk) in slice.as_chunks::<4>().0.iter().enumerate() {
             let row = idx
                 .checked_mul(freq_sa)
                 .ok_or_else(|| "FM-index suffix-array sample row overflows usize".to_string())?;
             if row >= bwt_len {
                 continue;
             }
-            let pos = i32::from_le_bytes(chunk.try_into().unwrap());
+            let pos = i32::from_le_bytes(*chunk);
             let pos = if pos < 0 {
                 i32::try_from(text_len)
                     .map_err(|_| "FM-index suffix-array sample exceeds i32 range".to_string())?
@@ -700,6 +699,8 @@ impl FmIndex {
         })
     }
 
+    // One argument per table makehmmerdb writes, in file order.
+    #[allow(clippy::too_many_arguments)]
     pub fn from_makehmmerdb_packed_dna_parts(
         packed_bwt: Vec<u8>,
         bwt_len: usize,
@@ -1090,12 +1091,12 @@ impl FmIndex {
                 "FM-index occurrence superblock table is outside mapped file".to_string()
             })?;
         let mut occ_b = Vec::with_capacity(occ_b_count);
-        for chunk in occ_b_slice.chunks_exact(2) {
-            occ_b.push(u16::from_le_bytes([chunk[0], chunk[1]]));
+        for chunk in occ_b_slice.as_chunks::<2>().0 {
+            occ_b.push(u16::from_le_bytes(*chunk));
         }
         let mut occ_sb = Vec::with_capacity(occ_sb_count);
-        for chunk in occ_sb_slice.chunks_exact(4) {
-            occ_sb.push(u32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]));
+        for chunk in occ_sb_slice.as_chunks::<4>().0 {
+            occ_sb.push(u32::from_le_bytes(*chunk));
         }
         let occ_rank =
             OccRank::from_makehmmerdb_dna_tables(bwt_len, term_loc, freq_cnt_b, &occ_b, &occ_sb)?;
@@ -1111,6 +1112,8 @@ impl FmIndex {
         )
     }
 
+    // One argument per region of the mapped file, in file order.
+    #[allow(clippy::too_many_arguments)]
     fn from_mapped_file_parts_with_occ(
         mapped_bytes: Arc<MmapBytes>,
         bwt_offset: usize,
@@ -1660,7 +1663,7 @@ mod tests {
             .sa
             .iter()
             .enumerate()
-            .filter(|(_, &pos)| (pos as usize) % sample_rate == 0)
+            .filter(|(_, &pos)| (pos as usize).is_multiple_of(sample_rate))
             .map(|(row, &pos)| (row as i32, pos))
             .collect();
 
@@ -1804,7 +1807,7 @@ mod tests {
     /// every search return 0 hits at those lengths.
     #[test]
     fn fm_index_occ_correct_at_block_boundaries() {
-        let bases = [b'A', b'C', b'G', b'T'];
+        let bases = b"ACGT";
         // Cover text_len around the 256/512 BWT-length boundaries (bwt = len+1).
         for &text_len in &[254usize, 255, 256, 257, 510, 511, 512, 767] {
             let text: Vec<u8> = (0..text_len).map(|i| bases[(i * 7 + 3) % 4]).collect();
@@ -1845,9 +1848,7 @@ mod tests {
 
     #[test]
     fn makehmmerdb_occ_tables_do_not_double_count_superblock_boundary() {
-        let text: Vec<u8> = (0..70_000)
-            .map(|i| [b'A', b'C', b'G', b'T'][(i * 11 + 1) % 4])
-            .collect();
+        let text: Vec<u8> = (0..70_000).map(|i| b"ACGT"[(i * 11 + 1) % 4]).collect();
         let full = FmIndex::build(&text);
         let term_loc = full.bwt.iter().position(|&ch| ch == 0).unwrap();
         let raw_sa_samples = full

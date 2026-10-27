@@ -367,15 +367,12 @@ pub fn esl_rand64_deal(rng: &mut Rand64, m_in: i64, n_in: i64) -> Vec<i64> {
 
             let mut y2 = 1.0f64;
             let mut top = nreal - 1.0;
-            let bottom;
-            let limit;
-            if n - 1 > s {
-                bottom = nreal - mreal;
-                limit = n - s;
+
+            let (bottom, limit) = if n - 1 > s {
+                (nreal - mreal, n - s)
             } else {
-                bottom = nreal + negsreal - 1.0;
-                limit = qu1;
-            }
+                (nreal + negsreal - 1.0, qu1)
+            };
 
             let mut bottom = bottom;
             let mut t = n - 1;

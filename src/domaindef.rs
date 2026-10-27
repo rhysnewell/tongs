@@ -537,9 +537,9 @@ fn score_domain_envelope(
                 clone.reconfig_rest_length(env_len as i32);
                 let local_bg_f = if do_longtarget_reparam {
                     let abc_lt = crate::alphabet::Alphabet::shared(hmm.abc_type);
-                    let local_bg = long_target_local_bg(dsq, ienv, jenv, bg, &abc_lt, seq_len);
-                    let fwd_emissions = env_om.get_fwd_emissions(bg, &abc_lt);
-                    clone.update_fwd_emission_scores(&local_bg, &fwd_emissions, &abc_lt);
+                    let local_bg = long_target_local_bg(dsq, ienv, jenv, bg, abc_lt, seq_len);
+                    let fwd_emissions = env_om.get_fwd_emissions(bg, abc_lt);
+                    clone.update_fwd_emission_scores(&local_bg, &fwd_emissions, abc_lt);
                     Some(local_bg.f.clone())
                 } else {
                     None
@@ -754,7 +754,7 @@ fn score_domain_envelope(
         if let Some(null2_arr) = simd_null2_scratch {
             add_null2_correction(
                 null2_arr,
-                &abc,
+                abc,
                 dsq,
                 ienv,
                 jenv,
@@ -764,7 +764,7 @@ fn score_domain_envelope(
         } else {
             let null2_arr =
                 generic_null2::null2_by_expectation(env_gm, unsafe { &*env_pp_ptr }, 1, env_len);
-            add_null2_correction(&null2_arr, &abc, dsq, ienv, jenv, n2sc, &mut dom_correction);
+            add_null2_correction(&null2_arr, abc, dsq, ienv, jenv, n2sc, &mut dom_correction);
         }
     }
 
@@ -786,7 +786,7 @@ fn score_domain_envelope(
                     &tr,
                     &sub_dsq,
                     hmm,
-                    &abc,
+                    abc,
                     Some(env_pp),
                     pre_trim_local_bg_f.as_deref(),
                     Some(&env_emission_odds),
@@ -850,7 +850,7 @@ fn score_domain_envelope(
                         &tr,
                         &sub_dsq,
                         hmm,
-                        &abc,
+                        abc,
                         Some(env_pp),
                         None,
                         Some(&env_emission_odds),
@@ -947,9 +947,9 @@ fn score_domain_envelope(
                         let trim_local_bg_f = if do_longtarget_reparam {
                             let abc_lt = crate::alphabet::Alphabet::shared(hmm.abc_type);
                             let local_bg =
-                                long_target_local_bg(dsq, new_ienv, new_jenv, bg, &abc_lt, seq_len);
-                            let fwd_emissions = base_om.get_fwd_emissions(bg, &abc_lt);
-                            trim_om.update_fwd_emission_scores(&local_bg, &fwd_emissions, &abc_lt);
+                                long_target_local_bg(dsq, new_ienv, new_jenv, bg, abc_lt, seq_len);
+                            let fwd_emissions = base_om.get_fwd_emissions(bg, abc_lt);
+                            trim_om.update_fwd_emission_scores(&local_bg, &fwd_emissions, abc_lt);
                             Some(local_bg.f)
                         } else {
                             None
@@ -1059,7 +1059,7 @@ fn score_domain_envelope(
                                     &trim_tr,
                                     &scratch.trim_sub_dsq,
                                     hmm,
-                                    &abc,
+                                    abc,
                                     Some(&scratch.trim_pp_gmx),
                                     trim_local_bg_f.as_deref(),
                                     Some(&trim_emission_odds),
@@ -1255,7 +1255,8 @@ fn score_domain_envelope(
     } else {
         dom_bias * (ESL_CONST_LOG2R as f32)
     };
-    let domain = Domain {
+
+    Domain {
         iali,
         jali,
         ienv: ienv as i64,
@@ -1271,9 +1272,7 @@ fn score_domain_envelope(
         is_reported: false,
         is_included: false,
         ad,
-    };
-
-    domain
+    }
 }
 
 /// Define domains in a sequence using posterior probability heuristics.
@@ -1645,7 +1644,7 @@ pub(crate) fn define_domains(
                     }
                     while pos <= sqto && pos <= region_len {
                         let x = dsq[ri + pos - 1] as usize;
-                        n2sc[ri + pos - 1] += null2_ratio_for_code(&null2, &abc, x);
+                        n2sc[ri + pos - 1] += null2_ratio_for_code(&null2, abc, x);
                         pos += 1;
                     }
                 }

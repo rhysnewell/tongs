@@ -78,7 +78,7 @@ pub fn logf(x: f32) -> f32 {
             return x;
         }
         if ix & 0x8000_0000 != 0 || ix.wrapping_mul(2) >= 0xff00_0000 {
-            return (x - x) / (x - x);
+            return invalid(x);
         }
         ix = (x * f32::from_bits(0x4b00_0000))
             .to_bits()
@@ -139,6 +139,12 @@ pub fn expf(x: f32) -> f32 {
     y = madd(zz, r2, y);
     y *= s;
     y as f32
+}
+
+// glibc builds its NaN as x - x over itself, so the bits are the CPU's default NaN, as glibc's are.
+#[allow(clippy::eq_op)]
+fn invalid(x: f32) -> f32 {
+    (x - x) / (x - x)
 }
 
 #[cfg(test)]

@@ -17,6 +17,8 @@
 //! caller, so this port stores only `k`/`kp`/`abc_type` and takes `&Alphabet`
 //! on the methods that need `sym`/`degen` — exactly where C dereferences
 //! `S->abc_r`.
+// The index loops follow esl_scorematrix.c line for line, so a port can be read against it.
+#![allow(clippy::needless_range_loop)]
 
 use crate::alphabet::{Alphabet, AlphabetType, DSQ_IGNORED, DSQ_ILLEGAL, DSQ_SENTINEL};
 use crate::util::cmath::c_exp_f64;
@@ -465,9 +467,7 @@ pub fn set_degenerate_probs(
     }
     if let Some(fj) = fj {
         fj[k] = 0.0;
-        for jp in (k + 1)..(kp - 2) {
-            fj[jp] = p[kp - 3][jp];
-        }
+        fj[(k + 1)..(kp - 2)].copy_from_slice(&p[kp - 3][(k + 1)..(kp - 2)]);
         fj[kp - 2] = 0.0;
         fj[kp - 1] = 0.0;
     }
@@ -669,21 +669,21 @@ mod tests {
         assert_eq!(s.min(), -4);
         assert_eq!(s.nc, 24);
         assert_eq!(s.outorder, "ARNDCQEGHILKMFPSTWYVBZX*");
-        assert_eq!(lambda, 3.17951304112292610e-01);
+        assert_eq!(lambda, 0.3179513041122926);
         // Row 0 (A), first three conditionals P(b|A).
-        assert_eq!(q[0][0], 2.78150905363230616e-01);
-        assert_eq!(q[0][1], 1.50018830924020363e-02);
-        assert_eq!(q[0][2], 2.80421646326272644e-02);
+        assert_eq!(q[0][0], 0.2781509053632306);
+        assert_eq!(q[0][1], 0.015001883092402036);
+        assert_eq!(q[0][2], 0.028042164632627264);
         // Row 26 is X, the fully degenerate amino code (Kp-3); it exercises
         // set_degenerate_probs over all 20 canonical residues.
-        assert_eq!(q[26][0], 7.96249800736142377e-02);
-        assert_eq!(q[26][19], 2.90649683917996587e-02);
+        assert_eq!(q[26][0], 0.07962498007361424);
+        assert_eq!(q[26][19], 0.02906496839179966);
     }
 
     #[test]
     fn pam30_matches_c_bitwise() {
         let (lambda, _q, _s) = conditionals(AlphabetType::Amino, "PAM30");
-        assert_eq!(lambda, 3.37378055649468156e-01);
+        assert_eq!(lambda, 0.33737805564946816);
     }
 
     /// The nucleotide path the issue is about: DNA1 is the default built-in for
@@ -696,33 +696,33 @@ mod tests {
         assert_eq!(s.max(), 46);
         assert_eq!(s.nc, 15);
         assert_eq!(s.outorder, "ACGTRYMKSWHBVDN");
-        assert_eq!(lambda, 1.99463435772605363e-02);
+        assert_eq!(lambda, 0.019946343577260536);
         assert_eq!(
             &q[0][..4],
             &[
-                5.68593694999839916e-01,
-                1.32566317464099276e-01,
-                1.49419993768030446e-01,
-                1.49419993768030446e-01
+                0.5685936949998399,
+                0.13256631746409928,
+                0.14941999376803045,
+                0.14941999376803045
             ][..]
         );
         assert_eq!(
             &q[3][..4],
             &[
-                1.47967491223543024e-01,
-                1.77063723567418480e-01,
-                1.33922446889969654e-01,
-                5.41046338319068787e-01
+                0.14796749122354302,
+                0.17706372356741848,
+                0.13392244688996965,
+                0.5410463383190688
             ][..]
         );
         // Row 15 is N (Kp-3), the fully degenerate nucleotide code.
         assert_eq!(
             &q[15][..4],
             &[
-                2.49025627256058729e-01,
-                2.42884466660844206e-01,
-                2.56619752977197857e-01,
-                2.51470153105899263e-01
+                0.24902562725605873,
+                0.2428844666608442,
+                0.25661975297719786,
+                0.25147015310589926
             ][..]
         );
     }

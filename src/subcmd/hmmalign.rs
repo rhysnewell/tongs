@@ -523,7 +523,7 @@ fn align_traces(
 ) -> Vec<AlignedTrace> {
     #[cfg(striped)]
     {
-        return align_traces_optimized(hmm, abc, bg, sequences);
+        align_traces_optimized(hmm, abc, bg, sequences)
     }
     #[cfg(not(striped))]
     {
@@ -825,10 +825,8 @@ fn faux_from_mapped_msa(
                         rpos += 1;
                     } else if is_gap {
                         tr.append(State::D, k, 0);
-                    } else if is_missing {
-                        if tr.st.last().copied() != Some(State::X) {
-                            tr.append(State::X, k, 0);
-                        }
+                    } else if is_missing && tr.st.last().copied() != Some(State::X) {
+                        tr.append(State::X, k, 0);
                     }
                 } else if is_residue {
                     sq.dsq.push(code);
