@@ -36,7 +36,7 @@ pub(crate) fn proteins() -> Vec<Sequence> {
     let mut all = Vec::new();
     let mut sq = Sequence::new();
     while file.read(&mut sq).unwrap() {
-        all.push(std::mem::replace(&mut sq, Sequence::new()));
+        all.push(std::mem::take(&mut sq));
     }
     all
 }

@@ -5,6 +5,7 @@ use std::process::Stdio;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
+#[cfg(target_os = "linux")]
 use tongs::hmm::{P7H_CA, P7H_CONS, P7H_CS, P7H_MAP, P7H_MMASK, P7H_RF};
 use tongs::hmmfile_binary;
 
@@ -3821,7 +3822,7 @@ fn nhmmer_alignment_output_wraps_like_bundled_c() {
             .wrapping_add(1442695040888963407);
         (state >> 33) as u32
     };
-    let bases = [b'A', b'C', b'G', b'T'];
+    let bases = *b"ACGT";
     let query: Vec<u8> = (0..320).map(|_| bases[(next() % 4) as usize]).collect();
     let mut target: Vec<u8> = (0..100_000).map(|_| bases[(next() % 4) as usize]).collect();
     let revcomp = |s: &[u8]| -> Vec<u8> {
@@ -11794,6 +11795,7 @@ fn normalized_hmmpgmd_worker_request_body(body: &[u8], normalize_hmm_shell: bool
     normalized
 }
 
+#[cfg(target_os = "linux")]
 fn assert_hmmpgmd_p7_hmm_shell_only_pointer_slots_differ(rust_shell: &[u8], c_shell: &[u8]) {
     assert_eq!(rust_shell.len(), 296);
     assert_eq!(c_shell.len(), 296);
@@ -11840,6 +11842,7 @@ fn assert_hmmpgmd_p7_hmm_shell_only_pointer_slots_differ(rust_shell: &[u8], c_sh
     }
 }
 
+#[cfg(target_os = "linux")]
 fn assert_hmmpgmd_rust_p7_hmm_pointer_layout_matches_serialized_blocks(
     shell: &[u8],
     transitions_len: usize,
@@ -11878,6 +11881,7 @@ fn assert_hmmpgmd_rust_p7_hmm_pointer_layout_matches_serialized_blocks(
     assert_eq!(map - consensus, query_length + 2);
 }
 
+#[cfg(target_os = "linux")]
 fn hmmpgmd_shell_ptr(shell: &[u8], offset: usize) -> usize {
     let width = std::mem::size_of::<usize>();
     let mut value = [0u8; std::mem::size_of::<usize>()];

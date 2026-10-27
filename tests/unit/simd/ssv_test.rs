@@ -21,7 +21,7 @@ fn shortcut_matches_msv_at_every_lane_width() {
         vec![16]
     };
     #[cfg(not(target_arch = "x86_64"))]
-    let widths = vec![16];
+    let widths = [16];
     let mut answered = 0;
     let targets = proteins();
     for (name, mut om) in profiles() {

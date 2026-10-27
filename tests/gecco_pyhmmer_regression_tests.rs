@@ -314,7 +314,7 @@ fn run_api_full_precision(hmm_path: &str, proteins_path: &str) -> Vec<FullPrecis
                 seq,
                 &mut local_hits,
             ) {
-                hits.hits.extend(local_hits.hits.into_iter());
+                hits.hits.extend(local_hits.hits);
             }
         }
         hits.sort_by_sortkey();
