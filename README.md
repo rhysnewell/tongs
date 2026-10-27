@@ -10,6 +10,8 @@ What changed from the fork point:
 * The SSV shortcut runs at every model length, on 32-lane AVX2 bands.
 * The Viterbi filter runs on 16-lane AVX2.
 * Profile tables are shared rather than copied, matrices are reused, and the posterior matrix is never stored: each row is decoded and used straight away.
+* Forward and Backward run two targets, and two domain envelopes, through each pass. One lane kernel serves the parser, the full matrix and the pair.
+* tongs builds for x86_64 and aarch64 only. The scalar fallback for other targets is gone.
 
 The text below is the upstream README.
 
