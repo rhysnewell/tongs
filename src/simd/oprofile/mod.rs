@@ -7,6 +7,8 @@
     clippy::needless_range_loop
 )]
 
+use std::sync::Arc;
+
 use crate::profile::*;
 #[cfg(target_arch = "x86_64")]
 use crate::util::cmath::c_log_to_f32;
@@ -76,12 +78,12 @@ impl AlignedF32x4 {
 pub struct OProfile {
     // === MSV byte-precision fields ===
     /// MSV byte-precision match scores: `rbv[residue_code][q_vector][16 bytes]`
-    pub rbv: Vec<Vec<[u8; 16]>>,
+    pub rbv: Arc<Vec<Vec<[u8; 16]>>>,
     /// SSV signed-byte match scores, with extra wrapped vectors for band code.
-    pub sbv: Vec<Vec<[u8; 16]>>,
-    pub ssv: Option<std::sync::Arc<crate::simd::ssv::SsvProfile>>,
+    pub sbv: Arc<Vec<Vec<[u8; 16]>>>,
+    pub ssv: Option<Arc<crate::simd::ssv::SsvProfile>>,
     #[cfg(target_arch = "x86_64")]
-    pub vit: Option<std::sync::Arc<crate::simd::vit_avx2::VitProfile>>,
+    pub vit: Option<Arc<crate::simd::vit_avx2::VitProfile>>,
     pub tbm_b: u8,
     pub tec_b: u8,
     pub tjb_b: u8,
@@ -91,10 +93,10 @@ pub struct OProfile {
 
     // === Viterbi word-precision fields ===
     /// Word-precision match emission scores: `rwv[residue_code][q_vector][8 words]`
-    pub rwv: Vec<Vec<[i16; 8]>>,
+    pub rwv: Arc<Vec<Vec<[i16; 8]>>>,
     /// Word-precision transition scores: twv[j][8 words]
     /// Layout: for each q, 7 transitions (BM,MM,IM,DM,MD,MI,II), then DD at end
-    pub twv: Vec<[i16; 8]>,
+    pub twv: Arc<Vec<[i16; 8]>>,
     /// Special state word scores: `xw[state][transition]`
     pub xw: [[i16; P7O_NXTRANS]; P7O_NXSTATES],
     pub scale_w: f32,
@@ -104,13 +106,13 @@ pub struct OProfile {
 
     // === Forward/Backward float-precision fields ===
     /// Float-precision emission scores (probability ratios): `rfv[residue][q_vector][4 floats]`
-    pub rfv: Vec<Vec<[f32; 4]>>,
+    pub rfv: Arc<Vec<Vec<[f32; 4]>>>,
     /// Float-precision transition scores: tfv[j][4 floats]
-    pub tfv: Vec<[f32; 4]>,
+    pub tfv: Arc<Vec<[f32; 4]>>,
     #[cfg(target_arch = "x86_64")]
-    pub rfv_a: Vec<Vec<AlignedF32x4>>,
+    pub rfv_a: Arc<Vec<Vec<AlignedF32x4>>>,
     #[cfg(target_arch = "x86_64")]
-    pub tfv_a: Vec<AlignedF32x4>,
+    pub tfv_a: Arc<Vec<AlignedF32x4>>,
     /// Special state float scores: `xf[state][transition]`
     pub xf: [[f32; P7O_NXTRANS]; P7O_NXSTATES],
 
@@ -172,8 +174,8 @@ impl OProfile {
 
         let ssv = crate::simd::ssv::SsvProfile::new(&mf.sbv, m);
         let mut om = OProfile {
-            rbv: mf.rbv,
-            sbv: mf.sbv,
+            rbv: Arc::new(mf.rbv),
+            sbv: Arc::new(mf.sbv),
             ssv,
             #[cfg(target_arch = "x86_64")]
             vit: None,
@@ -183,19 +185,19 @@ impl OProfile {
             scale_b: mf.scale_b,
             base_b: mf.base_b,
             bias_b: mf.bias_b,
-            rwv: vf.rwv,
-            twv: vf.twv,
+            rwv: Arc::new(vf.rwv),
+            twv: Arc::new(vf.twv),
             xw: vf.xw,
             scale_w: vf.scale_w,
             base_w: vf.base_w,
             ddbound_w: vf.ddbound_w,
             ncj_roundoff: 0.0,
-            rfv: fb.rfv,
-            tfv: fb.tfv,
+            rfv: Arc::new(fb.rfv),
+            tfv: Arc::new(fb.tfv),
             #[cfg(target_arch = "x86_64")]
-            rfv_a,
+            rfv_a: Arc::new(rfv_a),
             #[cfg(target_arch = "x86_64")]
-            tfv_a,
+            tfv_a: Arc::new(tfv_a),
             xf: fb.xf,
             m,
             l: gm.l,
@@ -410,8 +412,8 @@ impl OProfile {
                     sc_arr[3 * kp + x],
                 ];
                 let packed = unsafe { esl_sse_expf4(tmp) };
-                self.rfv[x][q] = packed;
-                self.rfv_a[x][q] = AlignedF32x4::from_array(packed);
+                Arc::make_mut(&mut self.rfv)[x][q] = packed;
+                Arc::make_mut(&mut self.rfv_a)[x][q] = AlignedF32x4::from_array(packed);
             }
 
             // Gap, nonresidue, missing codes — -infinity.
@@ -448,8 +450,8 @@ impl OProfile {
                     sc_arr[3 * kp + x],
                 ];
                 let packed = unsafe { esl_sse_expf4(tmp) };
-                self.rfv[x][q] = packed;
-                self.rfv_a[x][q] = AlignedF32x4::from_array(packed);
+                Arc::make_mut(&mut self.rfv)[x][q] = packed;
+                Arc::make_mut(&mut self.rfv_a)[x][q] = AlignedF32x4::from_array(packed);
             }
         }
     }

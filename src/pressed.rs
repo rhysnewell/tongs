@@ -1288,8 +1288,8 @@ pub fn oprofile_from_pressed_records(
 
     let ssv = crate::simd::ssv::SsvProfile::new(&sbv, msv.m);
     let mut om = OProfile {
-        rbv,
-        sbv,
+        rbv: std::sync::Arc::new(rbv),
+        sbv: std::sync::Arc::new(sbv),
         ssv,
         #[cfg(target_arch = "x86_64")]
         vit: None,
@@ -1299,19 +1299,19 @@ pub fn oprofile_from_pressed_records(
         scale_b: msv.scale_b,
         base_b: msv.base_b,
         bias_b: msv.bias_b,
-        rwv,
-        twv,
+        rwv: std::sync::Arc::new(rwv),
+        twv: std::sync::Arc::new(twv),
         xw: profile.xw,
         scale_w: profile.scale_w,
         base_w: profile.base_w,
         ddbound_w: profile.ddbound_w,
         ncj_roundoff: profile.ncj_roundoff,
-        rfv,
-        tfv,
+        rfv: std::sync::Arc::new(rfv),
+        tfv: std::sync::Arc::new(tfv),
         #[cfg(target_arch = "x86_64")]
-        rfv_a,
+        rfv_a: std::sync::Arc::new(rfv_a),
         #[cfg(target_arch = "x86_64")]
-        tfv_a,
+        tfv_a: std::sync::Arc::new(tfv_a),
         xf: profile.xf,
         m: msv.m,
         l: profile.l,

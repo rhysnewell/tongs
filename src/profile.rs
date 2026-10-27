@@ -3,6 +3,8 @@
 
 #![allow(clippy::needless_range_loop)]
 
+use std::sync::Arc;
+
 use crate::alphabet::Alphabet;
 use crate::bg::Bg;
 use crate::hmm::*;
@@ -46,11 +48,11 @@ pub const P7_UNIGLOCAL: i32 = 4;
 #[derive(Debug, Clone)]
 pub struct Profile {
     /// Transition scores: `tsc[k * P7P_NTRANS + s]` for node k, transition s
-    pub tsc: Vec<f32>,
+    pub tsc: Arc<Vec<f32>>,
     /// Emission scores: `rsc[x]` is a vec of (M+1)*P7P_NR entries for residue code x.
     /// `rsc[x][k * P7P_NR + P7P_MSC]` = match emission score at node k for residue x
     /// `rsc[x][k * P7P_NR + P7P_ISC]` = insert emission score at node k for residue x
-    pub rsc: Vec<Vec<f32>>,
+    pub rsc: Arc<Vec<Vec<f32>>>,
     /// Special state transitions `[NECJ][LOOP,MOVE]`
     pub xsc: [[f32; P7P_NXTRANS]; P7P_NXSTATES],
 
@@ -95,8 +97,8 @@ impl Profile {
         let xsc = [[f32::NEG_INFINITY; P7P_NXTRANS]; P7P_NXSTATES];
 
         Profile {
-            tsc,
-            rsc,
+            tsc: Arc::new(tsc),
+            rsc: Arc::new(rsc),
             xsc,
             mode: 0,
             l: 0,
@@ -128,7 +130,7 @@ impl Profile {
     /// Write transition score `tsc[k * P7P_NTRANS + s] = val`.
     #[inline]
     pub fn set_tsc(&mut self, k: usize, s: usize, val: f32) {
-        self.tsc[k * P7P_NTRANS + s] = val;
+        Arc::make_mut(&mut self.tsc)[k * P7P_NTRANS + s] = val;
     }
 
     /// Read the match emission score at node `k` for residue code `x`.
@@ -323,6 +325,7 @@ pub fn profile_config(hmm: &Hmm, bg: &Bg, gm: &mut Profile, l: i32, mode: i32) {
     sc[abc.kp - 2] = f32::NEG_INFINITY; // nonresidue
     sc[abc.kp - 1] = f32::NEG_INFINITY; // missing data
 
+    let rsc = Arc::make_mut(&mut gm.rsc);
     for k in 1..=hmm.m {
         for x in 0..abc.k {
             // Match C: log((double)mat[k][x] / bg->f[x]) — double precision division + log
@@ -331,22 +334,22 @@ pub fn profile_config(hmm: &Hmm, bg: &Bg, gm: &mut Profile, l: i32, mode: i32) {
         f_expect_sc_vec(&abc, &mut sc, &bg.f);
 
         for x in 0..abc.kp {
-            gm.rsc[x][k * P7P_NR + P7P_MSC] = sc[x];
+            rsc[x][k * P7P_NR + P7P_MSC] = sc[x];
         }
     }
 
     // Insert emission scores (hardwired to 0.0 = background)
     for x in 0..abc.kp {
         for k in 1..hmm.m {
-            gm.rsc[x][k * P7P_NR + P7P_ISC] = 0.0;
+            rsc[x][k * P7P_NR + P7P_ISC] = 0.0;
         }
-        gm.rsc[x][hmm.m * P7P_NR + P7P_ISC] = f32::NEG_INFINITY; // I_M impossible
+        rsc[x][hmm.m * P7P_NR + P7P_ISC] = f32::NEG_INFINITY; // I_M impossible
     }
     // Gap, nonresidue, missing data insert emissions = -inf
     for k in 1..=hmm.m {
-        gm.rsc[abc.k][k * P7P_NR + P7P_ISC] = f32::NEG_INFINITY;
-        gm.rsc[abc.kp - 2][k * P7P_NR + P7P_ISC] = f32::NEG_INFINITY;
-        gm.rsc[abc.kp - 1][k * P7P_NR + P7P_ISC] = f32::NEG_INFINITY;
+        rsc[abc.k][k * P7P_NR + P7P_ISC] = f32::NEG_INFINITY;
+        rsc[abc.kp - 2][k * P7P_NR + P7P_ISC] = f32::NEG_INFINITY;
+        rsc[abc.kp - 1][k * P7P_NR + P7P_ISC] = f32::NEG_INFINITY;
     }
 
     // Configure length model

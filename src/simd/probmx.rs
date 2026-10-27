@@ -156,8 +156,6 @@ impl ProbMx {
         self.scale.resize(rows, 0.0);
         self.row_scale.resize(rows, 1.0);
         self.dp.clear();
-        self.striped_dp.clear();
-        self.striped_dp_offset = 0;
     }
 
     /// Reuse this matrix as a full DP matrix sized for `(m, l)`.
@@ -185,11 +183,11 @@ impl ProbMx {
         let needed = striped_cells
             .checked_add(4)
             .expect("ProbMx striped storage length overflow");
-        // Hot Forward/Backward paths overwrite every active DP row. Avoid the
-        // full matrix memset on same-size reuse, but preserve Forward's
-        // all-zero row-0 invariant below. Newly grown capacity is still
-        // initialized so the Vec never contains invalid values.
-        self.striped_dp.resize(needed, 0.0);
+        // Forward and Backward overwrite every active row, so a reused matrix only grows and only
+        // row 0 is cleared.
+        if self.striped_dp.len() < needed {
+            self.striped_dp.resize(needed, 0.0);
+        }
         self.striped_dp_offset = aligned_f32_offset(&self.striped_dp);
         if striped_row_width > 0 {
             let row0_start = self.striped_dp_offset;
@@ -213,7 +211,7 @@ impl ProbMx {
     /// Get M-state posterior at position i, node k.
     #[inline]
     pub fn mmx(&self, i: usize, k: usize) -> f32 {
-        if !self.striped_dp.is_empty() {
+        if self.has_dp {
             let qi = (k - 1) % self.q;
             let lane = (k - 1) / self.q;
             self.striped_dp[self.striped_dp_offset
@@ -228,7 +226,7 @@ impl ProbMx {
     /// Get I-state posterior at position i, node k.
     #[inline]
     pub fn imx(&self, i: usize, k: usize) -> f32 {
-        if !self.striped_dp.is_empty() {
+        if self.has_dp {
             let qi = (k - 1) % self.q;
             let lane = (k - 1) / self.q;
             self.striped_dp[self.striped_dp_offset
@@ -244,7 +242,7 @@ impl ProbMx {
     /// Get D-state value at position i, node k.
     #[inline]
     pub fn dmx(&self, i: usize, k: usize) -> f32 {
-        if !self.striped_dp.is_empty() {
+        if self.has_dp {
             let qi = (k - 1) % self.q;
             let lane = (k - 1) / self.q;
             self.striped_dp[self.striped_dp_offset
@@ -260,7 +258,7 @@ impl ProbMx {
     /// Set M-state value.
     #[inline]
     pub fn set_mmx(&mut self, i: usize, k: usize, val: f32) {
-        if !self.striped_dp.is_empty() && k > 0 {
+        if self.has_dp && k > 0 {
             let qi = (k - 1) % self.q;
             let lane = (k - 1) / self.q;
             self.striped_dp[self.striped_dp_offset
@@ -276,7 +274,7 @@ impl ProbMx {
     /// Set I-state value.
     #[inline]
     pub fn set_imx(&mut self, i: usize, k: usize, val: f32) {
-        if !self.striped_dp.is_empty() && k > 0 {
+        if self.has_dp && k > 0 {
             let qi = (k - 1) % self.q;
             let lane = (k - 1) / self.q;
             self.striped_dp[self.striped_dp_offset
@@ -508,7 +506,7 @@ pub fn match_odds_from_rsc(rsc: &[Vec<f32>], k: usize, m: usize) -> Vec<f32> {
 /// (D is not a residue assignment). Dispatches to a striped fast path when
 /// both input matrices have striped DP storage.
 pub fn p_decoding_to_gmx(fwd: &ProbMx, bck: &ProbMx, m: usize, njc_loop: [f32; 3], pp: &mut Gmx) {
-    if !fwd.striped_dp.is_empty() && !bck.striped_dp.is_empty() {
+    if fwd.has_dp && bck.has_dp {
         p_decoding_to_gmx_striped(fwd, bck, m, njc_loop, pp);
         return;
     }
@@ -682,7 +680,7 @@ pub fn p_null2_odds_from_pmx(
     match_odds: &[f32],
     njc_loop: [f32; 3],
 ) -> Vec<f32> {
-    if !fwd.striped_dp.is_empty() && !bck.striped_dp.is_empty() {
+    if fwd.has_dp && bck.has_dp {
         return p_null2_odds_from_striped_pmx(fwd, bck, m, k, match_odds, njc_loop);
     }
 
@@ -783,7 +781,7 @@ pub fn p_null2_odds_from_pmx_reuse(
     exp_m: &mut Vec<f32>,
     exp_i: &mut Vec<f32>,
 ) {
-    if !fwd.striped_dp.is_empty() && !bck.striped_dp.is_empty() {
+    if fwd.has_dp && bck.has_dp {
         p_null2_odds_from_striped_pmx_reuse(
             fwd, bck, m, k, match_odds, njc_loop, null2, exp_m, exp_i,
         );
@@ -808,7 +806,7 @@ pub fn p_null2_odds_from_posteriors_reuse(
     exp_m: &mut Vec<f32>,
     exp_i: &mut Vec<f32>,
 ) {
-    if pp.striped_dp.is_empty() || pp.l == 0 {
+    if !pp.has_dp || pp.l == 0 {
         return;
     }
 
@@ -913,7 +911,7 @@ pub fn p_null2_odds_from_omx_expectation_reuse(
     exp_m: &mut Vec<f32>,
     exp_i: &mut Vec<f32>,
 ) {
-    if fwd.striped_dp.is_empty() || bck.striped_dp.is_empty() {
+    if !fwd.has_dp || !bck.has_dp {
         return;
     }
 

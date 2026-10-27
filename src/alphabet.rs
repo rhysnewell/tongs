@@ -1,6 +1,8 @@
 //! Biological sequence alphabets (DNA, RNA, amino acid).
 //! Direct port of Easel's esl_alphabet.
 
+use std::sync::OnceLock;
+
 /// Digital sequence residue type (unsigned 8-bit).
 pub type Dsq = u8;
 
@@ -52,6 +54,19 @@ pub struct Alphabet {
 impl Alphabet {
     /// Create one of the standard bio alphabets (DNA, RNA, or Amino).
     /// Counterpart to Easel's `esl_alphabet_Create()`.
+    pub fn shared(abc_type: AlphabetType) -> &'static Alphabet {
+        static AMINO: OnceLock<Alphabet> = OnceLock::new();
+        static DNA: OnceLock<Alphabet> = OnceLock::new();
+        static RNA: OnceLock<Alphabet> = OnceLock::new();
+        let cell = match abc_type {
+            AlphabetType::Amino => &AMINO,
+            AlphabetType::Dna => &DNA,
+            AlphabetType::Rna => &RNA,
+            AlphabetType::Unknown => panic!("Cannot create unknown alphabet"),
+        };
+        cell.get_or_init(|| Alphabet::new(abc_type))
+    }
+
     pub fn new(abc_type: AlphabetType) -> Self {
         match abc_type {
             AlphabetType::Dna => Self::create_dna(),

@@ -512,7 +512,7 @@ fn score_domain_envelope(
                 let mut clone = env_om.clone();
                 clone.reconfig_rest_length(env_len as i32);
                 let local_bg_f = if do_longtarget_reparam {
-                    let abc_lt = crate::alphabet::Alphabet::new(hmm.abc_type);
+                    let abc_lt = crate::alphabet::Alphabet::shared(hmm.abc_type);
                     let local_bg = long_target_local_bg(dsq, ienv, jenv, bg, &abc_lt, seq_len);
                     let fwd_emissions = env_om.get_fwd_emissions(bg, &abc_lt);
                     clone.update_fwd_emission_scores(&local_bg, &fwd_emissions, &abc_lt);
@@ -728,7 +728,7 @@ fn score_domain_envelope(
             }
         }
     } else {
-        let abc = Alphabet::new(hmm.abc_type);
+        let abc = Alphabet::shared(hmm.abc_type);
         if let Some(null2_arr) = simd_null2_scratch {
             add_null2_correction(
                 null2_arr,
@@ -759,7 +759,7 @@ fn score_domain_envelope(
                 // PP-line annotations. Matches C p7_alidisplay_Create with SIMD OA.
                 oasc = simd_oasc.unwrap_or(0.0);
                 let env_pp = unsafe { &*env_pp_ptr };
-                let abc = Alphabet::new(hmm.abc_type);
+                let abc = Alphabet::shared(hmm.abc_type);
                 simd_ad = crate::trace::alignment_display_with_pp_emission_odds(
                     &tr,
                     &sub_dsq,
@@ -820,7 +820,7 @@ fn score_domain_envelope(
                 );
                 let tr = g_oa_trace(env_gm, env_pp, &simd_scratch.oa_gmx);
                 if make_alignment_display {
-                    let abc = Alphabet::new(hmm.abc_type);
+                    let abc = Alphabet::shared(hmm.abc_type);
                     crate::trace::alignment_display_with_pp_emission_odds(
                         &tr,
                         &sub_dsq,
@@ -920,7 +920,7 @@ fn score_domain_envelope(
                         let mut trim_om = base_om.clone();
                         trim_om.reconfig_rest_length(new_env_len as i32);
                         let trim_local_bg_f = if do_longtarget_reparam {
-                            let abc_lt = crate::alphabet::Alphabet::new(hmm.abc_type);
+                            let abc_lt = crate::alphabet::Alphabet::shared(hmm.abc_type);
                             let local_bg =
                                 long_target_local_bg(dsq, new_ienv, new_jenv, bg, &abc_lt, seq_len);
                             let fwd_emissions = base_om.get_fwd_emissions(bg, &abc_lt);
@@ -1030,7 +1030,7 @@ fn score_domain_envelope(
                                 .trim_sub_dsq
                                 .extend_from_slice(&dsq[trim_sub_start + 1..=trim_sub_end]);
                             scratch.trim_sub_dsq.push(crate::alphabet::DSQ_SENTINEL);
-                            let abc = crate::alphabet::Alphabet::new(hmm.abc_type);
+                            let abc = crate::alphabet::Alphabet::shared(hmm.abc_type);
                             let trim_emission_odds =
                                 |k: usize, x: usize| trim_om.fwd_emission_odds(k, x);
                             if let Some(new_ad) =
@@ -1429,7 +1429,7 @@ pub(crate) fn define_domains(
         ..Default::default()
     };
     let mut n2sc = vec![0.0_f32; l + 1];
-    let abc = Alphabet::new(hmm.abc_type);
+    let abc = Alphabet::shared(hmm.abc_type);
     let mut env_gm = gm.clone();
     reconfig_unihit(&mut env_gm, l as i32);
     let optacc_deltas = OptAccTDelta::from_profile(&env_gm);
