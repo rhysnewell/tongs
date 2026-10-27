@@ -426,7 +426,7 @@ impl OProfile {
     }
 }
 
-/// Public re-export of `wordify` for use by AVX2/NEON restriping.
+/// Public re-export of `wordify` for use by AVX2 restriping.
 /// Mirrors C `wordify`: rounds `scale_w * sc` and saturates to i16 range.
 pub fn wordify_pub(scale_w: f32, sc: f32) -> i16 {
     let sc = (scale_w * sc).round();
