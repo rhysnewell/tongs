@@ -196,9 +196,7 @@ impl<'a> StripedSampler<'a> {
 
 impl regions::Sampler for StripedSampler<'_> {
     fn sample(&mut self, rng: &mut crate::util::random::MersenneTwister, tr: &mut Trace) {
-        crate::dp::generic_stotrace::stochastic_trace_pmx_into(
-            rng, self.len, self.om, self.pmx, tr,
-        );
+        crate::simd::stotrace::stochastic_trace_pmx_into(rng, self.len, self.om, self.pmx, tr);
     }
 
     fn null2(&self, tr: &Trace, zstart: usize, zend: usize) -> Vec<f32> {

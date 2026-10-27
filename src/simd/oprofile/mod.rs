@@ -383,46 +383,6 @@ impl OProfile {
             }
         }
     }
-
-    /// Read an already-quantized Viterbi transition word from the SSE-striped
-    /// `twv` layout. Used by wider SIMD restripers to preserve C/SSE word
-    /// scores exactly, including `maxval` clamping for II and padding lanes.
-    pub fn twv_word_at(&self, node: usize, tsc_type: usize) -> i16 {
-        let nq = nqw(self.m);
-        let q = (node) % nq;
-        let z = (node) / nq;
-        if z < 8 && q < self.twv.len() / 8 {
-            // Map back: twv layout is [q*7+t] for t=0..6, then DD at 7*nq+q
-            let idx = match tsc_type {
-                P7P_BM => q * 7 + P7O_BM,
-                P7P_MM => q * 7 + P7O_MM,
-                P7P_IM => q * 7 + P7O_IM,
-                P7P_DM => q * 7 + P7O_DM,
-                P7P_MD => q * 7 + P7O_MD,
-                P7P_MI => q * 7 + P7O_MI,
-                P7P_II => q * 7 + P7O_II,
-                P7P_DD => 7 * nq + q,
-                _ => return -32768,
-            };
-            if idx < self.twv.len() && z < 8 {
-                return self.twv[idx][z];
-            }
-        }
-        -32768
-    }
-}
-
-/// Public re-export of `wordify` for use by AVX2 restriping.
-/// Mirrors C `wordify`: rounds `scale_w * sc` and saturates to i16 range.
-pub fn wordify_pub(scale_w: f32, sc: f32) -> i16 {
-    let sc = (scale_w * sc).round();
-    if sc >= 32767.0 {
-        32767
-    } else if sc <= -32768.0 {
-        -32768
-    } else {
-        sc as i16
-    }
 }
 
 #[cfg(test)]

@@ -4,6 +4,5 @@ pub mod generic_fwdback;
 pub mod generic_msv;
 pub mod generic_null2;
 pub mod generic_optacc;
-pub mod generic_stotrace;
 pub mod generic_viterbi;
 pub mod gmx;

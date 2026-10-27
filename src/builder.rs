@@ -767,23 +767,6 @@ pub fn model_mask_from_msa(
     model_mask_from_digitized(msa, abc, &ax, &weights, symfrac, hand_arch)
 }
 
-/// Return aligned text rows with fragment flanks marked as missing (`~`),
-/// matching the `esl_msa_MarkFragments_old()` step in the C builder flow.
-pub fn fragment_marked_msa_rows(msa: &Msa, abc: &Alphabet, fragthresh: f32) -> Vec<Vec<u8>> {
-    let mut ax = msa.digitize(abc);
-    mark_fragments_old(&mut ax, abc, msa.alen, fragthresh);
-    let missing = abc.missing_code();
-    let mut rows = msa.aseq.clone();
-    for (row_idx, row) in rows.iter_mut().enumerate() {
-        for (apos, ch) in row.iter_mut().enumerate().take(msa.alen) {
-            if ax[row_idx][apos + 1] == missing {
-                *ch = b'~';
-            }
-        }
-    }
-    rows
-}
-
 /// Reconstruct the processed text MSA that HMMER's builder saves with
 /// `hmmbuild -O`: mark fragments, build doctored faux traces from the assigned
 /// match columns, trace-align them, annotate RF, and rejustify insertions.
@@ -1823,15 +1806,6 @@ impl Builder {
         self.w_len = w_len.unwrap_or(-1);
         self.w_beta = w_beta.unwrap_or(DEFAULT_WINDOW_BETA);
         self
-    }
-
-    /// The gap defaults for this builder's alphabet: amino 0.02/0.4, nucleotide
-    /// 0.03125/0.75 (hmmbuild.c:575-582).
-    pub fn default_gap_probs(abc_type: AlphabetType) -> (f64, f64) {
-        match abc_type {
-            AlphabetType::Amino => (POPEN_AMINO, PEXTEND_AMINO),
-            _ => (POPEN_NUCLEIC, PEXTEND_NUCLEIC),
-        }
     }
 
     /// Port of `p7_builder_LoadScoreSystem()` (p7_builder.c:196).

@@ -8,6 +8,7 @@ pub mod msv_filter;
 pub mod probmx;
 pub mod ssv;
 pub mod ssv_longtarget;
+pub mod stotrace;
 pub mod vit_filter;
 pub mod vit_wide;
 

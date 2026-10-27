@@ -545,34 +545,6 @@ impl FmIndex {
         }
     }
 
-    /// Build an FM-index over `text`, then retain only row-sampled suffix-array
-    /// entries. This matches `build()` search semantics while avoiding a
-    /// resident full `i32` suffix array for raw makehmmerdb C-stream targets.
-    pub fn build_sampled(text: &[u8]) -> Self {
-        Self::build_sampled_with_rate(text, DEFAULT_SA_SAMPLE_RATE)
-    }
-
-    pub fn build_sampled_with_rate(text: &[u8], sample_rate: usize) -> Self {
-        let mut index = Self::build(text);
-        let sample_rate = sample_rate.max(1);
-        index.sa_samples = index
-            .sa
-            .iter()
-            .enumerate()
-            .filter(|(row, _)| row.is_multiple_of(sample_rate))
-            .map(|(row, &pos)| {
-                (
-                    i32::try_from(row).expect("FM-index row exceeds i32 range"),
-                    pos,
-                )
-            })
-            .collect();
-        index.regular_sa_samples = None;
-        index.sa.clear();
-        index.sa.shrink_to_fit();
-        index
-    }
-
     pub fn from_makehmmerdb_raw_parts(
         bwt: Vec<u8>,
         raw_sa_samples: Vec<i32>,
@@ -781,40 +753,6 @@ impl FmIndex {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn from_makehmmerdb_packed_dna_parts_mapped_sa(
-        packed_bwt: Vec<u8>,
-        bwt_len: usize,
-        mapped_bytes: Arc<MmapBytes>,
-        raw_sa_offset: usize,
-        raw_sa_count: usize,
-        term_loc: usize,
-        freq_sa: usize,
-        freq_cnt_b: usize,
-        occ_b_codes: Vec<u16>,
-        occ_sb_codes: Vec<u32>,
-    ) -> Result<Self, String> {
-        let mut index = Self::from_makehmmerdb_packed_dna_parts(
-            packed_bwt,
-            bwt_len,
-            Vec::new(),
-            term_loc,
-            freq_sa,
-            freq_cnt_b,
-            occ_b_codes,
-            occ_sb_codes,
-        )?;
-        index.regular_sa_samples = Some(Self::make_mapped_regular_sa_samples(
-            mapped_bytes,
-            raw_sa_offset,
-            raw_sa_count,
-            freq_sa,
-            index.n,
-            bwt_len,
-        )?);
-        Ok(index)
-    }
-
-    #[allow(clippy::too_many_arguments)]
     pub fn from_makehmmerdb_mapped_packed_dna_parts_mapped_sa(
         mapped_packed_bwt: Arc<MmapBytes>,
         packed_bwt_offset: usize,
@@ -991,51 +929,6 @@ impl FmIndex {
         text_len: usize,
     ) -> Result<Self, String> {
         Self::from_parts_inner(bwt, sa, c, text_len, Some(DEFAULT_SA_SAMPLE_RATE))
-    }
-
-    pub fn from_mapped_parts(
-        bwt: Vec<u8>,
-        sa_len: usize,
-        mapped_bytes: Arc<MmapBytes>,
-        sa_offset: usize,
-        c: [usize; 256],
-        text_len: usize,
-    ) -> Result<Self, String> {
-        let expected_len = text_len
-            .checked_add(1)
-            .ok_or_else(|| "FM-index text length overflows usize".to_string())?;
-        Self::validate_parts_common(&bwt, c, text_len, expected_len)?;
-        if sa_len != bwt.len() {
-            return Err(format!(
-                "FM-index suffix-array length {} does not match BWT length {}",
-                sa_len,
-                bwt.len()
-            ));
-        }
-        let sa_bytes = sa_len
-            .checked_mul(4)
-            .ok_or_else(|| "FM-index mapped suffix-array span overflows usize".to_string())?;
-        sa_offset
-            .checked_add(sa_bytes)
-            .filter(|&end| end <= mapped_bytes.as_slice().len())
-            .ok_or_else(|| "FM-index mapped suffix-array is outside mapped file".to_string())?;
-        let occ_rank = OccRank::build(&bwt);
-        Ok(FmIndex {
-            bwt,
-            mapped_bwt: None,
-            packed_dna_bwt: None,
-            sa: Vec::new(),
-            sa_samples: Vec::new(),
-            regular_sa_samples: None,
-            mapped_sa: Some(MappedSa {
-                bytes: mapped_bytes,
-                offset: sa_offset,
-                len: sa_len,
-            }),
-            c,
-            n: text_len,
-            occ_rank,
-        })
     }
 
     pub fn from_mapped_file_parts(

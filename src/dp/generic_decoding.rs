@@ -5,7 +5,7 @@
 
 use crate::dp::gmx::*;
 use crate::profile::*;
-use crate::util::cmath::{c_exp_to_f32, c_expf_to_f32};
+use crate::util::cmath::c_expf_to_f32;
 
 /// Posterior decoding of residue assignments from filled Forward/Backward matrices.
 ///
@@ -116,50 +116,6 @@ pub fn domain_occupancy(pp: &Gmx) -> Vec<f32> {
     }
 
     mocc
-}
-
-/// Posterior decoding of domain location.
-///
-/// Computes the cumulative expected B- and E-state usage and the per-residue
-/// core-model occupancy from filled Forward/Backward matrices. Returns
-/// `(btot, etot, mocc)`, each of length `L+1` (0-indexed):
-/// - `btot[i]` = expected number of domains started at or before position `i`
-/// - `etot[i]` = expected number of domains ended at or before position `i`
-/// - `mocc[i]` = P(residue `i` is in a domain) = `1 - P(N|J|C loop)`
-/// Adapted for generic (log-space) DP matrices. Counterpart of `p7_GDomainDecoding`.
-pub fn domain_decoding(gm: &Profile, fwd: &Gmx, bck: &Gmx) -> (Vec<f32>, Vec<f32>, Vec<f32>) {
-    let l = fwd.l;
-    let overall_sc = fwd.xmx(l, P7G_C) + gm.xsc[P7P_C][P7P_MOVE];
-
-    let mut btot = vec![0.0_f32; l + 1];
-    let mut etot = vec![0.0_f32; l + 1];
-    let mut mocc = vec![0.0_f32; l + 1];
-
-    for i in 1..=l {
-        // B-state posterior at position i-1 (B at i-1 leads to M_1 at i)
-        // In generic log-space: exp(fwd_B[i-1] + bck_B[i-1] - overall_sc)
-        let b_post =
-            c_exp_to_f32((fwd.xmx(i - 1, P7G_B) + bck.xmx(i - 1, P7G_B) - overall_sc) as f64);
-        btot[i] = btot[i - 1] + b_post;
-
-        // E-state posterior at position i
-        let e_post = c_exp_to_f32((fwd.xmx(i, P7G_E) + bck.xmx(i, P7G_E) - overall_sc) as f64);
-        etot[i] = etot[i - 1] + e_post;
-
-        // mocc = 1 - P(N loop) - P(J loop) - P(C loop)
-        let n_post = c_expf_to_f32(
-            fwd.xmx(i - 1, P7G_N) + bck.xmx(i, P7G_N) + gm.xsc[P7P_N][P7P_LOOP] - overall_sc,
-        );
-        let j_post = c_expf_to_f32(
-            fwd.xmx(i - 1, P7G_J) + bck.xmx(i, P7G_J) + gm.xsc[P7P_J][P7P_LOOP] - overall_sc,
-        );
-        let c_post = c_expf_to_f32(
-            fwd.xmx(i - 1, P7G_C) + bck.xmx(i, P7G_C) + gm.xsc[P7P_C][P7P_LOOP] - overall_sc,
-        );
-        mocc[i] = 1.0 - (n_post + j_post + c_post);
-    }
-
-    (btot, etot, mocc)
 }
 
 #[cfg(test)]

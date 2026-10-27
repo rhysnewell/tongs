@@ -1,9 +1,7 @@
 //! Vector operations on f32/f64/i32 slices.
 //! Direct port of Easel's esl_vectorops.c, focusing on functions used by HMMER.
 
-use crate::util::cmath::{
-    c_expf_to_f32, c_log_f64, c_logf_to_f32, ESL_CONST_LOG2, ESL_CONST_LOG2R,
-};
+use crate::util::cmath::{c_logf_to_f32, ESL_CONST_LOG2R};
 
 // ===== Set =====
 
@@ -17,55 +15,14 @@ pub fn f_set(vec: &mut [f32], value: f32) {
     vec.iter_mut().for_each(|v| *v = value);
 }
 
-/// Set every element of `vec` to `value`. Port of `esl_vec_ISet`.
-pub fn i_set(vec: &mut [i32], value: i32) {
-    vec.iter_mut().for_each(|v| *v = value);
-}
-
 // ===== Scale =====
-
-/// Multiply every element of `vec` by `scale`. Port of `esl_vec_DScale`.
-pub fn d_scale(vec: &mut [f64], scale: f64) {
-    vec.iter_mut().for_each(|v| *v *= scale);
-}
-
-/// Multiply every element of `vec` by `scale`. Port of `esl_vec_FScale`.
-pub fn f_scale(vec: &mut [f32], scale: f32) {
-    vec.iter_mut().for_each(|v| *v *= scale);
-}
 
 // ===== Increment =====
 
-/// Add scalar `x` to every element of `vec`. Port of `esl_vec_FIncrement`.
-pub fn f_increment(vec: &mut [f32], x: f32) {
-    vec.iter_mut().for_each(|v| *v += x);
-}
-
 // ===== Add =====
-
-/// Element-wise add `vec2` into `vec1`. Port of `esl_vec_DAdd`.
-pub fn d_add(vec1: &mut [f64], vec2: &[f64]) {
-    for (a, b) in vec1.iter_mut().zip(vec2.iter()) {
-        *a += *b;
-    }
-}
-
-/// Element-wise add `vec2` into `vec1`. Port of `esl_vec_FAdd`.
-pub fn f_add(vec1: &mut [f32], vec2: &[f32]) {
-    for (a, b) in vec1.iter_mut().zip(vec2.iter()) {
-        *a += *b;
-    }
-}
 
 /// In-place vec1 += a * vec2 (element-wise). Port of `esl_vec_FAddScaled`.
 pub fn f_add_scaled(vec1: &mut [f32], vec2: &[f32], a: f32) {
-    for (v1, v2) in vec1.iter_mut().zip(vec2.iter()) {
-        *v1 += *v2 * a;
-    }
-}
-
-/// In-place vec1 += a * vec2 (element-wise). Port of `esl_vec_DAddScaled`.
-pub fn d_add_scaled(vec1: &mut [f64], vec2: &[f64], a: f64) {
     for (v1, v2) in vec1.iter_mut().zip(vec2.iter()) {
         *v1 += *v2 * a;
     }
@@ -103,22 +60,6 @@ pub fn f_sum(vec: &[f32]) -> f32 {
 
 // ===== Max, Min, ArgMax, ArgMin =====
 
-/// Return the maximum element in `vec`. Port of `esl_vec_DMax`.
-pub fn d_max(vec: &[f64]) -> f64 {
-    vec.iter().copied().fold(f64::NEG_INFINITY, f64::max)
-}
-
-pub fn f_max(vec: &[f32]) -> f32 {
-    vec[1..]
-        .iter()
-        .fold(vec[0], |best, &v| if v > best { v } else { best })
-}
-
-/// Return the minimum element in `vec`. Port of `esl_vec_FMin`.
-pub fn f_min(vec: &[f32]) -> f32 {
-    vec.iter().copied().fold(f32::INFINITY, f32::min)
-}
-
 /// Return the index of the maximum element in `vec`. Port of `esl_vec_FArgMax`.
 ///
 /// On ties the smallest index is returned, matching the C convention HMMER's
@@ -131,44 +72,9 @@ pub fn f_argmax(vec: &[f32]) -> usize {
         .unwrap_or(0)
 }
 
-/// Return the index of the maximum element in `vec`. Port of `esl_vec_IArgMax`.
-pub fn i_argmax(vec: &[i32]) -> usize {
-    vec.iter()
-        .enumerate()
-        .max_by_key(|(_, &v)| v)
-        .map(|(i, _)| i)
-        .unwrap_or(0)
-}
-
 // ===== Copy =====
 
-/// Copy `src` into `dst[..src.len()]`. Port of `esl_vec_DCopy`.
-pub fn d_copy(src: &[f64], dst: &mut [f64]) {
-    dst[..src.len()].copy_from_slice(src);
-}
-
-/// Copy `src` into `dst[..src.len()]`. Port of `esl_vec_FCopy`.
-pub fn f_copy(src: &[f32], dst: &mut [f32]) {
-    dst[..src.len()].copy_from_slice(src);
-}
-
-/// Copy `src` into `dst[..src.len()]`. Port of `esl_vec_ICopy`.
-pub fn i_copy(src: &[i32], dst: &mut [i32]) {
-    dst[..src.len()].copy_from_slice(src);
-}
-
 // ===== Reverse =====
-
-/// Write the elements of `vec` into `rev` in reversed order.
-///
-/// Caller must size `rev` for at least `vec.len()`. Unlike the C version,
-/// this signature requires distinct buffers (no in-place reverse).
-/// Port of `esl_vec_IReverse`.
-pub fn i_reverse(vec: &[i32], rev: &mut [i32]) {
-    for (i, &v) in vec.iter().enumerate() {
-        rev[vec.len() - 1 - i] = v;
-    }
-}
 
 // ===== Normalize =====
 
@@ -193,70 +99,9 @@ pub fn f_norm(vec: &mut [f32]) {
 
 // ===== Log / Exp operations =====
 
-/// Replace each element of `vec` with its natural log. Port of `esl_vec_FLog`.
-pub fn f_log(vec: &mut [f32]) {
-    vec.iter_mut().for_each(|v| *v = c_logf_to_f32(*v));
-}
-
-/// Replace each element of `vec` with exp(v). Port of `esl_vec_FExp`.
-pub fn f_exp(vec: &mut [f32]) {
-    vec.iter_mut().for_each(|v| *v = c_expf_to_f32(*v));
-}
-
 // esl_vec_FLogSum() skips terms more than 50 nats below the maximum.
-pub fn f_log_sum(vec: &[f32]) -> f32 {
-    let max = f_max(vec);
-    if max == f32::INFINITY {
-        return f32::INFINITY;
-    }
-    let mut sum = 0.0_f32;
-    for &v in vec {
-        if v > max - 50.0 {
-            sum += c_expf_to_f32(v - max);
-        }
-    }
-    c_logf_to_f32(sum) + max
-}
-
-pub fn f_lognorm(vec: &mut [f32]) {
-    let denom = f_log_sum(vec);
-    f_increment(vec, -denom);
-    f_exp(vec);
-    f_norm(vec);
-}
-
-/// Convert an unnormalized log_2 p-vector into a normalized probability vector.
-///
-/// Shift-by-max stabilization in log base 2.
-/// Port of `esl_vec_FLog2Norm`.
-pub fn f_log2norm(vec: &mut [f32]) {
-    let max = f_max(vec);
-    let mut sum = 0.0_f32;
-    for v in vec.iter() {
-        sum += c_expf_to_f32((*v - max) * ESL_CONST_LOG2 as f32);
-    }
-    let log2_sum = max + c_logf_to_f32(sum) * ESL_CONST_LOG2R as f32;
-    for v in vec.iter_mut() {
-        *v -= log2_sum;
-    }
-    vec.iter_mut()
-        .for_each(|v| *v = c_expf_to_f32(*v * ESL_CONST_LOG2 as f32));
-}
 
 // ===== Entropy =====
-
-/// Shannon entropy H = -sum(p_i log_2 p_i) in bits. Port of `esl_vec_DEntropy`.
-///
-/// Skips terms with p_i <= 0 by convention.
-pub fn d_entropy(p: &[f64]) -> f64 {
-    let mut h = 0.0;
-    for &pi in p {
-        if pi > 0.0 {
-            h -= pi * c_log_f64(pi) * ESL_CONST_LOG2R;
-        }
-    }
-    h
-}
 
 /// Shannon entropy in bits for a single-precision p-vector. Port of `esl_vec_FEntropy`.
 pub fn f_entropy(p: &[f32]) -> f32 {
@@ -269,91 +114,11 @@ pub fn f_entropy(p: &[f32]) -> f32 {
     h
 }
 
-/// Kullback-Leibler divergence D(p || q) = sum p_i log_2(p_i/q_i), in bits.
-///
-/// Port of `esl_vec_DRelEntropy`. Unlike the C version this returns 0 for
-/// (p_i>0, q_i==0) pairs rather than +inf, matching existing call sites.
-pub fn d_rel_entropy(p: &[f64], q: &[f64]) -> f64 {
-    let mut kl = 0.0;
-    for (&pi, &qi) in p.iter().zip(q.iter()) {
-        if pi > 0.0 && qi > 0.0 {
-            kl += pi * c_log_f64(pi / qi) * ESL_CONST_LOG2R;
-        }
-    }
-    kl
-}
-
-/// Single-precision KL divergence D(p || q) in bits. Port of `esl_vec_FRelEntropy`.
-pub fn f_rel_entropy(p: &[f32], q: &[f32]) -> f32 {
-    let mut kl = 0.0_f32;
-    for (&pi, &qi) in p.iter().zip(q.iter()) {
-        if pi > 0.0 && qi > 0.0 {
-            kl += pi * c_logf_to_f32(pi / qi) * ESL_CONST_LOG2R as f32;
-        }
-    }
-    kl
-}
-
 // ===== Type conversion =====
-
-/// Copy a double vector to a float vector with lossy conversion. Port of `esl_vec_D2F`.
-pub fn d2f(src: &[f64], dst: &mut [f32]) {
-    for (d, s) in dst.iter_mut().zip(src.iter()) {
-        *d = *s as f32;
-    }
-}
-
-/// Copy a float vector to a double vector. Port of `esl_vec_F2D`.
-pub fn f2d(src: &[f32], dst: &mut [f64]) {
-    for (d, s) in dst.iter_mut().zip(src.iter()) {
-        *d = *s as f64;
-    }
-}
 
 // ===== Compare =====
 
-/// Return true if vec1 and vec2 agree elementwise within absolute tolerance `tol`.
-///
-/// Port of `esl_vec_DCompare` (returns bool instead of eslOK/eslFAIL).
-pub fn d_compare(vec1: &[f64], vec2: &[f64], tol: f64) -> bool {
-    if vec1.len() != vec2.len() {
-        return false;
-    }
-    vec1.iter()
-        .zip(vec2.iter())
-        .all(|(a, b)| (a - b).abs() <= tol)
-}
-
-/// Return true if vec1 and vec2 agree elementwise within `tol`. Port of `esl_vec_FCompare`.
-pub fn f_compare(vec1: &[f32], vec2: &[f32], tol: f32) -> bool {
-    if vec1.len() != vec2.len() {
-        return false;
-    }
-    vec1.iter()
-        .zip(vec2.iter())
-        .all(|(a, b)| (a - b).abs() <= tol)
-}
-
-/// Strict equality of two integer vectors. Port of `esl_vec_ICompare`.
-pub fn i_compare(vec1: &[i32], vec2: &[i32]) -> bool {
-    vec1 == vec2
-}
-
 // ===== Validate =====
-
-/// Return true if `vec` is a valid probability vector: all entries in
-/// [0, 1+tol] and the total within `tol` of 1.0. Port of `esl_vec_DValidate`.
-pub fn d_validate(vec: &[f64], tol: f64) -> bool {
-    let sum = d_sum(vec);
-    (sum - 1.0).abs() <= tol && vec.iter().all(|&v| v >= 0.0 && v <= 1.0 + tol)
-}
-
-/// Return true if `vec` is a valid f32 probability vector (sum near 1, all in `[0,1]`).
-/// Port of `esl_vec_FValidate`.
-pub fn f_validate(vec: &[f32], tol: f32) -> bool {
-    let sum = f_sum(vec);
-    (sum - 1.0).abs() <= tol && vec.iter().all(|&v| v >= 0.0 && v <= 1.0 + tol)
-}
 
 #[cfg(test)]
 mod tests {

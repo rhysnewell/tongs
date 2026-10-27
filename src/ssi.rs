@@ -132,10 +132,6 @@ impl Index {
     pub fn is_empty(&self) -> bool {
         self.name_to_offset.is_empty()
     }
-
-    pub fn accession_len(&self) -> usize {
-        self.acc_to_offset.len()
-    }
 }
 
 struct HmmRecord {

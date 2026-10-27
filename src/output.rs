@@ -196,11 +196,6 @@ pub fn fmt_elapsed_seconds(val: f64) -> String {
     fmt_fixed_width(val, 5, 2, true)
 }
 
-/// Format a floating-point value using C's `%4.1f`.
-pub fn fmt_width4_1(val: f64) -> String {
-    fmt_fixed_width(val, 4, 1, false)
-}
-
 /// Format a floating-point value using C's `%6.2f`.
 pub fn fmt_width6_2(val: f64) -> String {
     fmt_fixed_width(val, 6, 2, false)

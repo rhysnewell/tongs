@@ -453,12 +453,6 @@ pub fn read_h3f_record<R: Read>(r: &mut R) -> HmmerResult<Option<MsvFilterData>>
     }))
 }
 
-/// True iff all four pressed-database sidecars (`.h3f`, `.h3p`, `.h3i`, `.h3m`)
-/// exist next to `hmm_path`.
-pub fn pressed_db_exists(hmm_path: &Path) -> bool {
-    pressed_sidecar_paths(hmm_path).iter().all(|p| p.exists())
-}
-
 /// Return `Ok(true)` when every pressed-database sidecar exists, `Ok(false)`
 /// when none exist, and an error for partial sidecar sets.
 pub fn pressed_db_sidecars_complete(hmm_path: &Path) -> HmmerResult<bool> {

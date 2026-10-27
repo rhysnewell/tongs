@@ -122,13 +122,6 @@ impl MersenneTwister {
         self.next_u32() as f64 / 4294967296.0 // 2^32
     }
 
-    /// Uniform random deviate on [0.0, 1.0) as a float, computed in f64 first.
-    ///
-    /// Casting to f32 only after sampling preserves the half-open range.
-    pub fn next_f32(&mut self) -> f32 {
-        self.next_f64() as f32
-    }
-
     /// Sample an index from a normalized discrete distribution `p[0..n-1]`.
     ///
     /// Returns the index `i` selected with probability `p[i]`. Caller must

@@ -318,20 +318,6 @@ fn apply_mixture_dirichlet_with_components(
     result.iter().map(|&v| v as f32).collect()
 }
 
-/// Apply HMMER3 Dirichlet priors to an HMM's weighted counts, in place,
-/// turning it into a parameterised probabilistic model (port of
-/// `p7_ParameterEstimation`).
-///
-/// For every node: match transitions (MM/MI/MD) and insert transitions
-/// (IM/II) are estimated via the single-component transition prior; delete
-/// transitions (DM/DD) are estimated for 1..M-1 and conventionally fixed at
-/// the model termini. Match emissions use the Sjolander 9-component prior
-/// for amino acids, the 4-component nucleic prior, or a Laplace fallback;
-/// insert emissions use the simple `amino_insert_alpha` / `nucleic_insert_alpha`.
-pub fn apply_priors(hmm: &mut crate::hmm::Hmm) {
-    apply_priors_with_strategy(hmm, PriorStrategy::Default);
-}
-
 pub fn apply_priors_with_strategy(hmm: &mut crate::hmm::Hmm, strategy: PriorStrategy) {
     match strategy {
         PriorStrategy::Default => apply_default_priors(hmm),

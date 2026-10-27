@@ -7,7 +7,6 @@
 
 use crate::dp::gmx::*;
 use crate::profile::Profile;
-use crate::trace::{State, Trace};
 use crate::util::cmath::{c_expf_to_f32, c_logf_to_f32};
 
 /// Calculate the null2 model from posterior probabilities (expectation method).
@@ -85,76 +84,6 @@ pub fn null2_score(null2: &[f32], dsq: &[u8], ienv: usize, jenv: usize) -> f32 {
         }
     }
     score
-}
-
-/// Assign null2 odds ratios to an envelope by the trace-sampling method.
-///
-/// Given a stochastic traceback `tr`, computes null2 odds ratios `f'(x)/f(x)`
-/// as state-usage-weighted emission probabilities, with usages tallied from
-/// trace positions `zstart..=zend`. Target sequence is irrelevant; profile
-/// configuration is irrelevant (only emission odds are used).
-/// Counterpart of `p7_GNull2_ByTrace`.
-pub fn null2_by_trace(gm: &Profile, tr: &Trace, zstart: usize, zend: usize) -> Vec<f32> {
-    let m = gm.m;
-    let k = gm.abc_k;
-    let mut exp_m = vec![0.0_f32; m + 1];
-    let mut exp_i = vec![0.0_f32; m + 1];
-    let mut exp_n = 0.0_f32;
-    let mut exp_c = 0.0_f32;
-    let mut exp_j = 0.0_f32;
-    let mut ld = 0usize;
-
-    for z in zstart..=zend.min(tr.n.saturating_sub(1)) {
-        match tr.st[z] {
-            State::M => {
-                ld += 1;
-                exp_m[tr.k[z]] += 1.0;
-            }
-            State::I => {
-                ld += 1;
-                exp_i[tr.k[z]] += 1.0;
-            }
-            State::N if z > 0 && tr.st[z - 1] == State::N => {
-                ld += 1;
-                exp_n += 1.0;
-            }
-            State::C if z > 0 && tr.st[z - 1] == State::C => {
-                ld += 1;
-                exp_c += 1.0;
-            }
-            State::J if z > 0 && tr.st[z - 1] == State::J => {
-                ld += 1;
-                exp_j += 1.0;
-            }
-            _ => {}
-        }
-    }
-
-    if ld == 0 {
-        return vec![1.0; k];
-    }
-
-    let norm = 1.0 / ld as f32;
-    for node in 1..=m {
-        exp_m[node] *= norm;
-        exp_i[node] *= norm;
-    }
-    exp_n *= norm;
-    exp_c *= norm;
-    exp_j *= norm;
-    let xfactor = exp_n + exp_c + exp_j;
-
-    let mut null2 = vec![0.0_f32; k];
-    for (x, null2_x) in null2.iter_mut().enumerate().take(k) {
-        for node in 1..m {
-            *null2_x += exp_m[node] * c_expf_to_f32(gm.msc(node, x));
-            *null2_x += exp_i[node] * c_expf_to_f32(gm.isc(node, x));
-        }
-        *null2_x += exp_m[m] * c_expf_to_f32(gm.msc(m, x));
-        *null2_x += xfactor;
-    }
-
-    null2
 }
 
 #[cfg(test)]

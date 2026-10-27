@@ -17,15 +17,6 @@ pub fn pdf(x: f64, mu: f64, lambda: f64) -> f64 {
     lambda * c_exp_f64(-y - c_exp_f64(-y))
 }
 
-/// Log probability density at `x`: log P(X = x) for the Gumbel.
-///
-/// Equals log(lambda) - y - exp(-y) where y = lambda*(x-mu).
-/// Port of Easel `esl_gumbel_logpdf`.
-pub fn logpdf(x: f64, mu: f64, lambda: f64) -> f64 {
-    let y = lambda * (x - mu);
-    c_log_f64(lambda) - y - c_exp_f64(-y)
-}
-
 /// Cumulative distribution P(X <= x) for the Gumbel.
 ///
 /// Returns exp(-exp(-y)) with y = lambda*(x-mu).
@@ -33,15 +24,6 @@ pub fn logpdf(x: f64, mu: f64, lambda: f64) -> f64 {
 pub fn cdf(x: f64, mu: f64, lambda: f64) -> f64 {
     let y = lambda * (x - mu);
     c_exp_f64(-c_exp_f64(-y))
-}
-
-/// Log cumulative distribution log P(X <= x) for the Gumbel.
-///
-/// Equals -exp(-y) with y = lambda*(x-mu).
-/// Port of Easel `esl_gumbel_logcdf`.
-pub fn logcdf(x: f64, mu: f64, lambda: f64) -> f64 {
-    let y = lambda * (x - mu);
-    -c_exp_f64(-y)
 }
 
 /// Right tail mass P(X > x) = 1 - CDF for the Gumbel.

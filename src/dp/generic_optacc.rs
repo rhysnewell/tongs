@@ -46,17 +46,6 @@ impl OptAccTDelta {
     }
 }
 
-/// Optimal accuracy decoding: fill step.
-///
-/// Fills DP matrix `ox` for the OA algorithm of Kall et al. (2005), using a
-/// previously computed posterior decoding matrix `pp` for profile `gm`.
-/// Returns the OA score: the expected number of correctly decoded positions
-/// in the target sequence (≤ L). Counterpart of `p7_GOptimalAccuracy`.
-pub fn g_optimal_accuracy(gm: &Profile, pp: &Gmx, ox: &mut Gmx) -> f32 {
-    let deltas = OptAccTDelta::from_profile(gm);
-    g_optimal_accuracy_with_deltas(gm, pp, ox, &deltas)
-}
-
 /// OA fill with caller-provided precomputed transition deltas (avoids reallocation).
 pub fn g_optimal_accuracy_with_deltas(
     gm: &Profile,
