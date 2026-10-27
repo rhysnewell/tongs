@@ -176,7 +176,14 @@ impl Pipeline {
             if is_x86_feature_detected!("sse2") {
                 self.fwd_pmx.resize_parser(l);
                 fwd_sc = unsafe {
-                    crate::simd::fwd_filter::forward_parser_pmx(&sq.dsq, l, om, &mut self.fwd_pmx)
+                    crate::simd::fwd_filter::forward_parser_pmx_offset_with_scratch(
+                        &sq.dsq,
+                        0,
+                        l,
+                        om,
+                        &mut self.fwd_pmx,
+                        &mut self.fwd_dp,
+                    )
                 };
                 fwd_pmx_for_domains = Some(&self.fwd_pmx);
             } else {

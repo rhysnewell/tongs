@@ -84,6 +84,8 @@ pub struct Pipeline {
     #[cfg(target_arch = "x86_64")]
     vit_dp: Vec<std::arch::x86_64::__m256i>,
     #[cfg(target_arch = "x86_64")]
+    fwd_dp: Vec<std::arch::x86_64::__m128>,
+    #[cfg(target_arch = "x86_64")]
     fwd_pmx: crate::simd::probmx::ProbMx,
     #[cfg(target_arch = "x86_64")]
     domain_scratch: crate::domaindef::DomainSimdScratch,
@@ -134,6 +136,8 @@ impl Pipeline {
             #[cfg(target_arch = "x86_64")]
             vit_dp: Vec::new(),
             #[cfg(target_arch = "x86_64")]
+            fwd_dp: Vec::new(),
+            #[cfg(target_arch = "x86_64")]
             fwd_pmx: crate::simd::probmx::ProbMx::new(0),
             #[cfg(target_arch = "x86_64")]
             domain_scratch: crate::domaindef::DomainSimdScratch::new(),
@@ -158,6 +162,8 @@ impl Pipeline {
             msv_dp: Vec::new(),
             #[cfg(target_arch = "x86_64")]
             vit_dp: Vec::new(),
+            #[cfg(target_arch = "x86_64")]
+            fwd_dp: Vec::new(),
             #[cfg(target_arch = "x86_64")]
             fwd_pmx: crate::simd::probmx::ProbMx::new(0),
             #[cfg(target_arch = "x86_64")]
