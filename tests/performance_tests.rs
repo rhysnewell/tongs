@@ -10,7 +10,7 @@ use std::path::Path;
 use std::time::Instant;
 
 /// Read a P7 HMM from an Infernal CM file (embedded HMMER3/f section).
-fn read_hmm_from_cm(cm_path: &Path) -> hmmer_pure_rs::hmm::Hmm {
+fn read_hmm_from_cm(cm_path: &Path) -> tongs::hmm::Hmm {
     let file = std::fs::File::open(cm_path).unwrap();
     let reader = BufReader::new(file);
 
@@ -32,16 +32,16 @@ fn read_hmm_from_cm(cm_path: &Path) -> hmmer_pure_rs::hmm::Hmm {
 
     let text = hmm_lines.join("\n");
     let cursor = BufReader::new(std::io::Cursor::new(text.into_bytes()));
-    let hmms = hmmer_pure_rs::hmmfile::read_hmms(cursor).unwrap();
+    let hmms = tongs::hmmfile::read_hmms(cursor).unwrap();
     hmms.into_iter().next().unwrap()
 }
 
 /// Run the full P7 pipeline on a sequence and return (domains, elapsed).
 fn run_p7_timed(
-    hmm: &hmmer_pure_rs::hmm::Hmm,
+    hmm: &tongs::hmm::Hmm,
     seq: &[u8],
 ) -> (Vec<(usize, usize, f32)>, std::time::Duration) {
-    use hmmer_pure_rs::*;
+    use tongs::*;
 
     let abc = alphabet::Alphabet::new(hmm.abc_type);
     let bg_obj = bg::Bg::new(&abc);
@@ -81,10 +81,10 @@ fn run_p7_timed(
 /// Run the SSV long-target filter on a sequence and return (windows, elapsed).
 /// This is the approach C Infernal uses for genome-scale search.
 fn run_p7_longtarget_timed(
-    hmm: &hmmer_pure_rs::hmm::Hmm,
+    hmm: &tongs::hmm::Hmm,
     seq: &[u8],
 ) -> (Vec<(usize, usize, f32)>, std::time::Duration) {
-    use hmmer_pure_rs::*;
+    use tongs::*;
 
     let abc = alphabet::Alphabet::new(hmm.abc_type);
     let bg_obj = bg::Bg::new(&abc);

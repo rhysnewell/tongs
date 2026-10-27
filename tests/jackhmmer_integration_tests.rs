@@ -19,7 +19,7 @@ fn test_path(relative: &str) -> String {
 }
 
 fn run_jackhmmer(seqfile: &str, seqdb: &str, extra_args: &[&str]) -> String {
-    let output = Command::new(binary_path("hmmer"))
+    let output = Command::new(binary_path("tongs"))
         .arg("jackhmmer")
         .args(extra_args)
         .args([seqfile, seqdb])
@@ -46,7 +46,7 @@ fn run_jackhmmer_with_tblout(seqfile: &str, seqdb: &str, extra_args: &[&str]) ->
             .as_nanos()
     ));
 
-    let output = Command::new(binary_path("hmmer"))
+    let output = Command::new(binary_path("tongs"))
         .arg("jackhmmer")
         .args(extra_args)
         .arg("--tblout")
@@ -83,7 +83,7 @@ fn run_jackhmmer_with_domtblout(
             .as_nanos()
     ));
 
-    let output = Command::new(binary_path("hmmer"))
+    let output = Command::new(binary_path("tongs"))
         .arg("jackhmmer")
         .args(extra_args)
         .arg("--domtblout")
@@ -129,7 +129,7 @@ fn run_jackhmmer_with_tblout_and_domtblout(
             .as_nanos()
     ));
 
-    let output = Command::new(binary_path("hmmer"))
+    let output = Command::new(binary_path("tongs"))
         .arg("jackhmmer")
         .args(extra_args)
         .arg("--tblout")
@@ -1055,7 +1055,7 @@ fn jackhmmer_round1_nobias_is_accepted_on_globins_fixture() {
 #[test]
 fn jackhmmer_chkhmm_writes_per_round_hmm_checkpoints() {
     let prefix = unique_prefix("chkhmm", "prefix");
-    let output = Command::new(binary_path("hmmer"))
+    let output = Command::new(binary_path("tongs"))
         .arg("jackhmmer")
         .arg("-N")
         .arg("2")
@@ -1091,7 +1091,7 @@ fn jackhmmer_chkhmm_writes_per_round_hmm_checkpoints() {
 #[test]
 fn jackhmmer_chkali_writes_per_round_alignment_checkpoints() {
     let prefix = unique_prefix("chkali", "prefix");
-    let output = Command::new(binary_path("hmmer"))
+    let output = Command::new(binary_path("tongs"))
         .arg("jackhmmer")
         .arg("-N")
         .arg("2")
@@ -1132,7 +1132,7 @@ fn jackhmmer_chkali_writes_per_round_alignment_checkpoints() {
 #[test]
 fn jackhmmer_a_writes_final_included_alignment() {
     let ali_out = unique_prefix("ali", "sto");
-    let output = Command::new(binary_path("hmmer"))
+    let output = Command::new(binary_path("tongs"))
         .arg("jackhmmer")
         .arg("-N")
         .arg("1")
@@ -1210,7 +1210,7 @@ fn jackhmmer_a_writes_final_included_alignment() {
 #[test]
 fn jackhmmer_globins_round2_chkali_matches_bundled_c_exactly() {
     let (rust_stdout, rust_msas) = run_jackhmmer_with_chkali(
-        &binary_path("hmmer"),
+        &binary_path("tongs"),
         true,
         &test_path("hmmer/tutorial/HBB_HUMAN"),
         &test_path("hmmer/tutorial/globins45.fa"),
@@ -1236,7 +1236,7 @@ fn jackhmmer_globins_round2_chkali_matches_bundled_c_exactly() {
 #[test]
 fn jackhmmer_globins_round2_chkhmm_matches_bundled_c_exactly() {
     let (rust_stdout, rust_hmms) = run_jackhmmer_with_chkhmm(
-        &binary_path("hmmer"),
+        &binary_path("tongs"),
         true,
         &test_path("hmmer/tutorial/HBB_HUMAN"),
         &test_path("hmmer/tutorial/globins45.fa"),
@@ -1272,7 +1272,7 @@ fn jackhmmer_post_round_model_construction_options_match_bundled_c() {
         "0.0",
     ];
     let (rust_stdout, rust_hmms) = run_jackhmmer_with_chkhmm(
-        &binary_path("hmmer"),
+        &binary_path("tongs"),
         true,
         &test_path("hmmer/tutorial/HBB_HUMAN"),
         &test_path("hmmer/tutorial/globins45.fa"),
@@ -1307,7 +1307,7 @@ fn jackhmmer_post_round_model_construction_options_match_bundled_c() {
 fn jackhmmer_globins_round2_tables_match_bundled_c_exactly() {
     let (rust_stdout, _rust_hmms, rust_tblout, rust_domtblout) =
         run_jackhmmer_with_chkhmm_and_tables(
-            &binary_path("hmmer"),
+            &binary_path("tongs"),
             true,
             &test_path("hmmer/tutorial/HBB_HUMAN"),
             &test_path("hmmer/tutorial/globins45.fa"),
@@ -1411,7 +1411,7 @@ fn jackhmmer_medium_realworld_round2_checkpoint_and_tables_match_c() {
 
     let (rust_stdout, rust_hmms, rust_tblout, rust_domtblout) =
         run_jackhmmer_with_chkhmm_and_tables(
-            &binary_path("hmmer"),
+            &binary_path("tongs"),
             true,
             query.to_str().unwrap(),
             &db,
@@ -1447,7 +1447,7 @@ fn jackhmmer_haptoglobin_realworld_round2_checkpoint_and_tables_match_c() {
 
     let (rust_stdout, rust_hmms, rust_tblout, rust_domtblout) =
         run_jackhmmer_with_chkhmm_and_tables(
-            &binary_path("hmmer"),
+            &binary_path("tongs"),
             true,
             query.to_str().unwrap(),
             &db,

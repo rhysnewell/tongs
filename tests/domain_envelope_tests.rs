@@ -14,7 +14,7 @@ use std::io::BufReader;
 use std::path::Path;
 
 /// Read a P7 HMM from an Infernal CM file (embedded HMMER3/f section).
-fn read_hmm_from_cm(cm_path: &Path) -> hmmer_pure_rs::hmm::Hmm {
+fn read_hmm_from_cm(cm_path: &Path) -> tongs::hmm::Hmm {
     use std::io::BufRead;
     let file = std::fs::File::open(cm_path).unwrap();
     let reader = BufReader::new(file);
@@ -37,7 +37,7 @@ fn read_hmm_from_cm(cm_path: &Path) -> hmmer_pure_rs::hmm::Hmm {
 
     let text = hmm_lines.join("\n");
     let cursor = BufReader::new(std::io::Cursor::new(text.into_bytes()));
-    let hmms = hmmer_pure_rs::hmmfile::read_hmms(cursor).unwrap();
+    let hmms = tongs::hmmfile::read_hmms(cursor).unwrap();
     hmms.into_iter().next().unwrap()
 }
 
@@ -51,8 +51,8 @@ struct DomainResult {
 }
 
 /// Run the P7 pipeline on a sequence and return domain envelopes with scores.
-fn run_p7_pipeline_full(hmm: &hmmer_pure_rs::hmm::Hmm, seq: &[u8]) -> Vec<DomainResult> {
-    use hmmer_pure_rs::*;
+fn run_p7_pipeline_full(hmm: &tongs::hmm::Hmm, seq: &[u8]) -> Vec<DomainResult> {
+    use tongs::*;
 
     let abc = alphabet::Alphabet::new(hmm.abc_type);
     let bg_obj = bg::Bg::new(&abc);
@@ -94,8 +94,8 @@ fn run_p7_pipeline_full(hmm: &hmmer_pure_rs::hmm::Hmm, seq: &[u8]) -> Vec<Domain
 }
 
 /// Run the P7 pipeline on a sequence and return domain envelopes.
-fn run_p7_pipeline(hmm: &hmmer_pure_rs::hmm::Hmm, seq: &[u8]) -> Vec<(usize, usize, f32)> {
-    use hmmer_pure_rs::*;
+fn run_p7_pipeline(hmm: &tongs::hmm::Hmm, seq: &[u8]) -> Vec<(usize, usize, f32)> {
+    use tongs::*;
 
     let abc = alphabet::Alphabet::new(hmm.abc_type);
     let bg_obj = bg::Bg::new(&abc);

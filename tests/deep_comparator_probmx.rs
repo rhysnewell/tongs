@@ -1,11 +1,9 @@
 #![cfg(target_arch = "x86_64")]
 
-use hmmer_pure_rs::{alphabet::Alphabet, bg::Bg, hmmfile, profile, simd};
 use std::path::Path;
+use tongs::{alphabet::Alphabet, bg::Bg, hmmfile, profile, simd};
 
-fn configured_profile(
-    seq_len: usize,
-) -> (Vec<hmmer_pure_rs::alphabet::Dsq>, simd::oprofile::OProfile) {
+fn configured_profile(seq_len: usize) -> (Vec<tongs::alphabet::Dsq>, simd::oprofile::OProfile) {
     let hmms = hmmfile::read_hmm_file(Path::new(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/test_data/Pkinase_pfam.hmm"

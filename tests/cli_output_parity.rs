@@ -5,8 +5,8 @@ use std::process::Stdio;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-use hmmer_pure_rs::hmm::{P7H_CA, P7H_CONS, P7H_CS, P7H_MAP, P7H_MMASK, P7H_RF};
-use hmmer_pure_rs::hmmfile_binary;
+use tongs::hmm::{P7H_CA, P7H_CONS, P7H_CS, P7H_MAP, P7H_MMASK, P7H_RF};
+use tongs::hmmfile_binary;
 
 static HMMPGMD_TEST_LOCK: Mutex<()> = Mutex::new(());
 
@@ -2868,7 +2868,7 @@ fn hmmsearch_and_phmmer_restrictdb_n_limit_target_count() {
     std::fs::write(&query, ">query\nACDEFGHIKLMNPQRSTVWY\n").unwrap();
     let test2_offset = seqdb_text.find(">test2\n").unwrap() as u64;
     let ssi = dir.path().join("override.ssi");
-    hmmer_pure_rs::ssi::write_hmm_ssi_records(
+    tongs::ssi::write_hmm_ssi_records(
         &seqdb,
         &ssi,
         [
@@ -2959,7 +2959,7 @@ fn nhmmer_restricted_database_uses_ssi_offset_and_reports_header() {
     let seqdb_text = ">t1\nGAATTC\n>t2\nGAATTC\n>t3\nGAATTC\n";
     std::fs::write(&seqdb, seqdb_text).unwrap();
     let ssi = dir.path().join("override.ssi");
-    hmmer_pure_rs::ssi::write_hmm_ssi_records(
+    tongs::ssi::write_hmm_ssi_records(
         &seqdb,
         &ssi,
         [
@@ -3122,13 +3122,12 @@ fn nhmmscan_w_beta_is_reported_but_keeps_pressed_maxl_like_c() {
     let dir = tempfile::tempdir().unwrap();
     let hmmdb = dir.path().join("made1.hmm");
     std::fs::copy("hmmer/tutorial/MADE1.hmm", &hmmdb).unwrap();
-    let original = hmmer_pure_rs::hmmfile::read_hmm_file_auto(std::path::Path::new(
-        "hmmer/tutorial/MADE1.hmm",
-    ))
-    .unwrap()
-    .remove(0);
+    let original =
+        tongs::hmmfile::read_hmm_file_auto(std::path::Path::new("hmmer/tutorial/MADE1.hmm"))
+            .unwrap()
+            .remove(0);
     let beta = 0.5_f64;
-    let expected_maxl = hmmer_pure_rs::builder::max_length_from_beta(&original, beta);
+    let expected_maxl = tongs::builder::max_length_from_beta(&original, beta);
     assert_ne!(expected_maxl, original.max_length);
 
     let press = Command::new(hmmer())
@@ -4166,10 +4165,10 @@ fn nhmmer_w_beta_recomputes_hmmout_max_length() {
     let hmmout = dir.path().join("query.hmm");
     let beta = 0.5_f64;
     let input_hmm = "hmmer/tutorial/MADE1.hmm";
-    let original = hmmer_pure_rs::hmmfile::read_hmm_file_auto(std::path::Path::new(input_hmm))
+    let original = tongs::hmmfile::read_hmm_file_auto(std::path::Path::new(input_hmm))
         .unwrap()
         .remove(0);
-    let expected_maxl = hmmer_pure_rs::builder::max_length_from_beta(&original, beta);
+    let expected_maxl = tongs::builder::max_length_from_beta(&original, beta);
     assert_ne!(expected_maxl, original.max_length);
 
     let output = Command::new(hmmer())
@@ -4316,7 +4315,7 @@ fn hmmpress_preserves_non_utf8_sidecar_path_bytes() {
     );
 
     for suffix in [".h3m", ".h3f", ".h3p", ".h3i"] {
-        let sidecar = hmmer_pure_rs::ssi::path_with_appended_suffix(&hmmdb, suffix);
+        let sidecar = tongs::ssi::path_with_appended_suffix(&hmmdb, suffix);
         assert!(sidecar.exists(), "missing sidecar {}", sidecar.display());
         assert!(sidecar.as_os_str().as_bytes().contains(&0xff));
     }
@@ -7264,7 +7263,7 @@ fn hmmfetch_index_preserves_non_utf8_ssi_path_bytes() {
         String::from_utf8_lossy(&index.stderr)
     );
 
-    let ssi_path = hmmer_pure_rs::ssi::path_with_appended_suffix(&hmm_path, ".ssi");
+    let ssi_path = tongs::ssi::path_with_appended_suffix(&hmm_path, ".ssi");
     assert!(ssi_path.exists(), "missing SSI {}", ssi_path.display());
     assert!(ssi_path.as_os_str().as_bytes().contains(&0xff));
 }
@@ -8624,12 +8623,12 @@ fn hmmbuild_singlemx_supports_dna_and_rna_defaults() {
         (
             "--dna",
             b"# STOCKHOLM 1.0\n#=GF ID dna_single\nq1 ACGTACGT--NN\n//\n".as_slice(),
-            hmmer_pure_rs::alphabet::AlphabetType::Dna,
+            tongs::alphabet::AlphabetType::Dna,
         ),
         (
             "--rna",
             b"# STOCKHOLM 1.0\n#=GF ID rna_single\nq1 ACGUACGU--NN\n//\n".as_slice(),
-            hmmer_pure_rs::alphabet::AlphabetType::Rna,
+            tongs::alphabet::AlphabetType::Rna,
         ),
     ];
 
@@ -8676,7 +8675,7 @@ fn hmmbuild_singlemx_supports_dna_and_rna_defaults() {
         assert!(summary.contains("# single sequence builder:          substitution matrix\n"));
         assert!(summary.contains("# substitution score matrix:        DNA1\n"));
 
-        let hmm = hmmer_pure_rs::hmmfile::read_hmm_file_auto(&hmm_out)
+        let hmm = tongs::hmmfile::read_hmm_file_auto(&hmm_out)
             .unwrap()
             .pop()
             .unwrap();
@@ -8685,7 +8684,7 @@ fn hmmbuild_singlemx_supports_dna_and_rna_defaults() {
         assert_eq!(hmm.nseq, 1);
         assert!((hmm.eff_nseq - 1.0).abs() < 1e-6);
 
-        use hmmer_pure_rs::hmm::{DD, DM, II, IM, MD, MI, MM};
+        use tongs::hmm::{DD, DM, II, IM, MD, MI, MM};
         let eps = 1e-4;
         assert!((hmm.t[0][MM] - 0.9375).abs() < eps);
         assert!((hmm.t[0][MI] - 0.03125).abs() < eps);
@@ -8783,11 +8782,11 @@ fn hmmbuild_applies_fixed_gap_options_after_normal_msa_builds() {
     assert!(summary.contains("# gap open probability:             0.030000\n"));
     assert!(summary.contains("# gap extend probability:           0.200000\n"));
 
-    let hmm = hmmer_pure_rs::hmmfile::read_hmm_file_auto(&hmm_out)
+    let hmm = tongs::hmmfile::read_hmm_file_auto(&hmm_out)
         .unwrap()
         .pop()
         .unwrap();
-    use hmmer_pure_rs::hmm::{DD, DM, II, IM, MD, MI, MM};
+    use tongs::hmm::{DD, DM, II, IM, MD, MI, MM};
     let eps = 1e-4;
     for node in 0..hmm.m {
         assert!((hmm.t[node][MM] - 0.94).abs() < eps);

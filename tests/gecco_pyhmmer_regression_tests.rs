@@ -7,7 +7,7 @@
 
 use std::process::Command;
 
-use hmmer_pure_rs as hmmer;
+use tongs as hmmer;
 
 #[derive(Debug, Clone)]
 struct DomainRow {

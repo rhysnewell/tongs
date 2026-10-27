@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 use std::process::Command;
 
-use hmmer_pure_rs::alphabet::Alphabet;
-use hmmer_pure_rs::msa;
+use tongs::alphabet::Alphabet;
+use tongs::msa;
 
 fn binary_path(name: &str) -> std::path::PathBuf {
     let mut path = std::env::current_exe()
@@ -34,7 +34,7 @@ fn run_hmmalign_with_args(hmm: &str, seqfile: &str, extra_args: &[&str]) -> Stri
 }
 
 fn run_hmmalign_command(hmm: &str, seqfile: &str, extra_args: &[&str]) -> std::process::Output {
-    let output = Command::new(binary_path("hmmer"))
+    let output = Command::new(binary_path("tongs"))
         .arg("align")
         .args(extra_args)
         .args([hmm, seqfile])
@@ -311,7 +311,7 @@ MYG_SAISC          --LSDGEWQLVLNIWGKVEADIPSHGQEVLISLFKGHPETLEKFDKFKHLKSEDEMKASEE
 #[test]
 fn hmmalign_o_writes_file_and_suppresses_stdout() {
     let tmp = tempfile::NamedTempFile::new().unwrap();
-    let output = Command::new(binary_path("hmmer"))
+    let output = Command::new(binary_path("tongs"))
         .args([
             "align",
             "-o",
@@ -503,7 +503,7 @@ fn hmmalign_mapali_legacy_20aa_rejects_checksum_mismatch() {
     std::fs::write(&seqfile, b">test\nACDEFGHIKLMNPQRSTVWY\n").unwrap();
     write_mismatched_mapali(&test_path("hmmer/testsuite/20aa.sto"), &msafile);
 
-    let output = Command::new(binary_path("hmmer"))
+    let output = Command::new(binary_path("tongs"))
         .arg("align")
         .args([
             "--mapali",
@@ -530,7 +530,7 @@ fn hmmalign_mapali_legacy_20aa_a2m_rejects_checksum_mismatch() {
     std::fs::write(&seqfile, b">test\nACDEFGHIKLMNPQRSTVWY\n").unwrap();
     write_mismatched_mapali(&test_path("hmmer/testsuite/20aa.sto"), &msafile);
 
-    let output = Command::new(binary_path("hmmer"))
+    let output = Command::new(binary_path("tongs"))
         .arg("align")
         .args([
             "--mapali",
@@ -564,7 +564,7 @@ fn hmmalign_mapali_custom_built_simple_case_matches_exact_stockholm_output() {
     .unwrap();
     std::fs::write(&seqfile, b">test\nACDEFGHIKLMNPQRSTVWY\n").unwrap();
 
-    let build = Command::new(binary_path("hmmer"))
+    let build = Command::new(binary_path("tongs"))
         .args([
             "build",
             hmmfile.to_str().unwrap(),
@@ -708,7 +708,7 @@ fn hmmalign_mapali_custom_built_simple_case_a2m_matches_exact_output() {
     )
     .unwrap();
     std::fs::write(&seqfile, b">test\nACDEFGHIKLMNPQRSTVWY\n").unwrap();
-    let build = Command::new(binary_path("hmmer"))
+    let build = Command::new(binary_path("tongs"))
         .args([
             "build",
             hmmfile.to_str().unwrap(),
@@ -771,7 +771,7 @@ fn hmmalign_mapali_custom_built_fragment_case_matches_exact_output() {
     .unwrap();
     std::fs::write(&seqfile, b">test\nCDEFGHIKLMNPQRSTVW\n").unwrap();
 
-    let build = Command::new(binary_path("hmmer"))
+    let build = Command::new(binary_path("tongs"))
         .args([
             "build",
             "-n",
@@ -825,7 +825,7 @@ fn hmmalign_mapali_legacy_caudal_act_rejects_checksum_mismatch() {
     write_dealigned_fasta_from_stockholm(&test_path("hmmer/testsuite/Caudal_act.sto"), &seqfile);
     write_mismatched_mapali(&test_path("hmmer/testsuite/Caudal_act.sto"), &msafile);
 
-    let output = Command::new(binary_path("hmmer"))
+    let output = Command::new(binary_path("tongs"))
         .arg("align")
         .args([
             "--mapali",

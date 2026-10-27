@@ -13,7 +13,7 @@
 use std::io::{BufRead, BufReader};
 use std::path::Path;
 
-fn read_hmm_from_cm(cm_path: &Path) -> hmmer_pure_rs::hmm::Hmm {
+fn read_hmm_from_cm(cm_path: &Path) -> tongs::hmm::Hmm {
     let file = std::fs::File::open(cm_path).unwrap();
     let reader = BufReader::new(file);
     let mut hmm_lines = Vec::new();
@@ -32,15 +32,15 @@ fn read_hmm_from_cm(cm_path: &Path) -> hmmer_pure_rs::hmm::Hmm {
     }
     let text = hmm_lines.join("\n");
     let cursor = BufReader::new(std::io::Cursor::new(text.into_bytes()));
-    hmmer_pure_rs::hmmfile::read_hmms(cursor)
+    tongs::hmmfile::read_hmms(cursor)
         .unwrap()
         .into_iter()
         .next()
         .unwrap()
 }
 
-fn run_pipeline(hmm: &hmmer_pure_rs::hmm::Hmm, seq: &[u8]) -> Vec<(usize, usize, f32)> {
-    use hmmer_pure_rs::*;
+fn run_pipeline(hmm: &tongs::hmm::Hmm, seq: &[u8]) -> Vec<(usize, usize, f32)> {
+    use tongs::*;
     let abc = alphabet::Alphabet::new(hmm.abc_type);
     let bg_obj = bg::Bg::new(&abc);
     let mut gm = profile::Profile::new(hmm.m, &abc);
@@ -152,7 +152,7 @@ fn ssv_sensitivity_ecoli_genome() {
         genome.extend_from_slice(line.trim().as_bytes());
     }
 
-    use hmmer_pure_rs::*;
+    use tongs::*;
     let abc = alphabet::Alphabet::new(hmm.abc_type);
     let bg_obj = bg::Bg::new(&abc);
     let mut gm = profile::Profile::new(hmm.m, &abc);

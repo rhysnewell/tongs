@@ -1819,7 +1819,7 @@ fn hmmfetch_index_rejects_records_rejected_by_full_parser() {
     assert!(!output.status.success());
     let stderr = String::from_utf8(output.stderr).unwrap();
     assert!(stderr.contains("Error creating SSI index"), "{stderr}");
-    assert!(!hmmer_pure_rs::ssi::path_with_appended_suffix(&hmm, ".ssi").exists());
+    assert!(!tongs::ssi::path_with_appended_suffix(&hmm, ".ssi").exists());
 }
 
 #[test]

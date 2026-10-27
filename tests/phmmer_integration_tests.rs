@@ -17,7 +17,7 @@ fn test_path(relative: &str) -> String {
 }
 
 fn run_phmmer(seqfile: &str, seqdb: &str, extra_args: &[&str]) -> std::process::Output {
-    let output = Command::new(binary_path("hmmer"))
+    let output = Command::new(binary_path("tongs"))
         .arg("phmmer")
         .args(extra_args)
         .args([seqfile, seqdb])

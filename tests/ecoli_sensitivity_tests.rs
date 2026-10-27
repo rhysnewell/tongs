@@ -11,7 +11,7 @@ use std::io::{BufRead, BufReader};
 use std::path::Path;
 use std::time::Instant;
 
-fn read_hmm_from_cm(cm_path: &Path) -> hmmer_pure_rs::hmm::Hmm {
+fn read_hmm_from_cm(cm_path: &Path) -> tongs::hmm::Hmm {
     let file = std::fs::File::open(cm_path).unwrap();
     let reader = BufReader::new(file);
     let mut hmm_lines = Vec::new();
@@ -30,7 +30,7 @@ fn read_hmm_from_cm(cm_path: &Path) -> hmmer_pure_rs::hmm::Hmm {
     }
     let text = hmm_lines.join("\n");
     let cursor = BufReader::new(std::io::Cursor::new(text.into_bytes()));
-    hmmer_pure_rs::hmmfile::read_hmms(cursor)
+    tongs::hmmfile::read_hmms(cursor)
         .unwrap()
         .into_iter()
         .next()
@@ -63,24 +63,18 @@ fn ssv_finds_high_scoring_ecoli_trnas() {
     let seq = read_first_fasta_seq(ecoli_path);
     println!("E. coli genome: {} bp", seq.len());
 
-    let abc = hmmer_pure_rs::alphabet::Alphabet::new(hmm.abc_type);
-    let bg = hmmer_pure_rs::bg::Bg::new(&abc);
-    let mut gm = hmmer_pure_rs::profile::Profile::new(hmm.m, &abc);
-    hmmer_pure_rs::profile::profile_config(
-        &hmm,
-        &bg,
-        &mut gm,
-        200,
-        hmmer_pure_rs::profile::P7_LOCAL,
-    );
-    let om = hmmer_pure_rs::simd::oprofile::OProfile::convert(&gm);
+    let abc = tongs::alphabet::Alphabet::new(hmm.abc_type);
+    let bg = tongs::bg::Bg::new(&abc);
+    let mut gm = tongs::profile::Profile::new(hmm.m, &abc);
+    tongs::profile::profile_config(&hmm, &bg, &mut gm, 200, tongs::profile::P7_LOCAL);
+    let om = tongs::simd::oprofile::OProfile::convert(&gm);
 
     let dsq = abc.digitize(&seq);
     let max_length = (hmm.m * 4) as i32;
 
     let start = Instant::now();
     let windows = unsafe {
-        hmmer_pure_rs::simd::ssv_longtarget::p7_ssv_filter_longtarget(
+        tongs::simd::ssv_longtarget::p7_ssv_filter_longtarget(
             &dsq,
             seq.len(),
             &om,

@@ -44,7 +44,7 @@ fn run_hmmsearch(hmm: &str, seqdb: &str, extra_args: &[&str]) -> (String, String
     args.push(hmm);
     args.push(seqdb);
 
-    let output = Command::new(binary_path("hmmer"))
+    let output = Command::new(binary_path("tongs"))
         .args(&args)
         .output()
         .expect("failed to run hmmer search");
@@ -77,7 +77,7 @@ fn run_hmmsearch_dom(hmm: &str, seqdb: &str, extra_args: &[&str]) -> (String, St
     args.push(hmm);
     args.push(seqdb);
 
-    let output = Command::new(binary_path("hmmer"))
+    let output = Command::new(binary_path("tongs"))
         .args(&args)
         .output()
         .expect("failed to run hmmer search");
@@ -108,7 +108,7 @@ fn run_hmmsearch_pfamtbl(hmm: &str, seqdb: &str, extra_args: &[&str]) -> String 
     args.push(hmm);
     args.push(seqdb);
 
-    let output = Command::new(binary_path("hmmer"))
+    let output = Command::new(binary_path("tongs"))
         .args(&args)
         .output()
         .expect("failed to run hmmer search");

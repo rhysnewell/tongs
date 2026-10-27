@@ -24,7 +24,7 @@ fn test_path(relative: &str) -> String {
 fn run_hmmsearch_tblout(hmm: &str, seqdb: &str) -> String {
     let dir = tempfile::tempdir().unwrap();
     let tblout = dir.path().join("tblout.txt");
-    let output = Command::new(binary_path("hmmer"))
+    let output = Command::new(binary_path("tongs"))
         .args([
             "search",
             "--noali",
@@ -64,7 +64,7 @@ fn run_hmmsearch_tblout_with_args(hmm: &str, seqdb: &str, extra_args: &[&str]) -
     let mut args = vec!["search", "--noali"];
     args.extend_from_slice(extra_args);
     args.extend_from_slice(&["--tblout", tblout.to_str().unwrap(), hmm, seqdb]);
-    let output = Command::new(binary_path("hmmer"))
+    let output = Command::new(binary_path("tongs"))
         .args(args)
         .output()
         .expect("failed to run hmmer search");
@@ -97,7 +97,7 @@ fn run_c_hmmsearch_tblout_with_args(hmm: &str, seqdb: &str, extra_args: &[&str])
 fn run_nhmmer_tblout(hmm: &str, seqdb: &str) -> String {
     let dir = tempfile::tempdir().unwrap();
     let tblout = dir.path().join("tblout.txt");
-    let output = Command::new(binary_path("hmmer"))
+    let output = Command::new(binary_path("tongs"))
         .args(["nhmmer", "--tblout", tblout.to_str().unwrap(), hmm, seqdb])
         .output()
         .expect("failed to run hmmer nhmmer");
@@ -123,7 +123,7 @@ fn run_nhmmer_dfamtblout_with_args(hmm: &str, seqdb: &str, extra_args: &[&str]) 
     let mut args = vec!["nhmmer"];
     args.extend_from_slice(extra_args);
     args.extend_from_slice(&["--dfamtblout", dfamtblout.to_str().unwrap(), hmm, seqdb]);
-    let output = Command::new(binary_path("hmmer"))
+    let output = Command::new(binary_path("tongs"))
         .args(args)
         .output()
         .expect("failed to run hmmer nhmmer");
@@ -177,7 +177,7 @@ fn build_rust_hmm(args: &[&str], output: &std::path::Path, msa: &str) {
     let mut cmd_args = vec!["build"];
     cmd_args.extend_from_slice(args);
     cmd_args.extend_from_slice(&[output.to_str().unwrap(), msa]);
-    let output = Command::new(binary_path("hmmer"))
+    let output = Command::new(binary_path("tongs"))
         .args(cmd_args)
         .output()
         .expect("failed to run hmmer build");
@@ -300,7 +300,7 @@ fn normalize_hmmbuild_summary(output: &str) -> String {
 }
 
 fn make_rust_fm_database(seqdb: &str, output_path: &std::path::Path) {
-    let output = Command::new(binary_path("hmmer"))
+    let output = Command::new(binary_path("tongs"))
         .args(["makehmmerdb", seqdb, output_path.to_str().unwrap()])
         .output()
         .expect("failed to run hmmer makehmmerdb");
@@ -324,7 +324,7 @@ fn make_c_fm_database(seqdb: &str, output_path: &std::path::Path) {
 }
 
 fn run_hmmer_stdout(args: &[&str]) -> String {
-    let output = Command::new(binary_path("hmmer"))
+    let output = Command::new(binary_path("tongs"))
         .args(args)
         .output()
         .expect("failed to run hmmer command");
@@ -350,7 +350,7 @@ fn run_c_tool_stdout(tool: &str, args: &[&str]) -> String {
 }
 
 fn press_rust_hmmdb(hmmdb: &std::path::Path) {
-    let output = Command::new(binary_path("hmmer"))
+    let output = Command::new(binary_path("tongs"))
         .args(["press", "-f", hmmdb.to_str().unwrap()])
         .output()
         .expect("failed to run hmmer press");
@@ -376,7 +376,7 @@ fn press_c_hmmdb(hmmdb: &std::path::Path) {
 fn run_phmmer_tblout(seqfile: &str, seqdb: &str) -> String {
     let dir = tempfile::tempdir().unwrap();
     let tblout = dir.path().join("tblout.txt");
-    let output = Command::new(binary_path("hmmer"))
+    let output = Command::new(binary_path("tongs"))
         .args([
             "phmmer",
             "--tblout",
@@ -415,7 +415,7 @@ fn run_phmmer_tblout_with_args(seqfile: &str, seqdb: &str, extra_args: &[&str]) 
     let mut args = vec!["phmmer", "--noali"];
     args.extend_from_slice(extra_args);
     args.extend_from_slice(&["--tblout", tblout.to_str().unwrap(), seqfile, seqdb]);
-    let output = Command::new(binary_path("hmmer"))
+    let output = Command::new(binary_path("tongs"))
         .args(args)
         .output()
         .expect("failed to run hmmer phmmer");
@@ -451,7 +451,7 @@ fn run_phmmer_domtblout_with_args(seqfile: &str, seqdb: &str, extra_args: &[&str
     let mut args = vec!["phmmer"];
     args.extend_from_slice(extra_args);
     args.extend_from_slice(&["--domtblout", domtblout.to_str().unwrap(), seqfile, seqdb]);
-    let output = Command::new(binary_path("hmmer"))
+    let output = Command::new(binary_path("tongs"))
         .args(args)
         .output()
         .expect("failed to run hmmer phmmer");
@@ -469,7 +469,7 @@ fn run_phmmer_pfamtblout_with_args(seqfile: &str, seqdb: &str, extra_args: &[&st
     let mut args = vec!["phmmer"];
     args.extend_from_slice(extra_args);
     args.extend_from_slice(&["--pfamtblout", pfamtblout.to_str().unwrap(), seqfile, seqdb]);
-    let output = Command::new(binary_path("hmmer"))
+    let output = Command::new(binary_path("tongs"))
         .args(args)
         .output()
         .expect("failed to run hmmer phmmer");
@@ -518,7 +518,7 @@ fn run_c_phmmer_domtblout_with_args(seqfile: &str, seqdb: &str, extra_args: &[&s
 fn run_jackhmmer_tblout(seqfile: &str, seqdb: &str) -> String {
     let dir = tempfile::tempdir().unwrap();
     let tblout = dir.path().join("tblout.txt");
-    let output = Command::new(binary_path("hmmer"))
+    let output = Command::new(binary_path("tongs"))
         .args([
             "jackhmmer",
             "-N",
@@ -574,7 +574,7 @@ fn run_jackhmmer_tblout_with_args(seqfile: &str, seqdb: &str, extra_args: &[&str
         seqfile,
         seqdb,
     ]);
-    let output = Command::new(binary_path("hmmer"))
+    let output = Command::new(binary_path("tongs"))
         .args(args)
         .output()
         .expect("failed to run hmmer jackhmmer");
@@ -621,7 +621,7 @@ fn run_jackhmmer_domtblout_with_args(seqfile: &str, seqdb: &str, extra_args: &[&
         seqfile,
         seqdb,
     ]);
-    let output = Command::new(binary_path("hmmer"))
+    let output = Command::new(binary_path("tongs"))
         .args(args)
         .output()
         .expect("failed to run hmmer jackhmmer");
@@ -682,7 +682,7 @@ fn run_nhmmer(hmm: &str, seqdb: &str, extra_args: &[&str]) -> (String, String) {
     let mut args = vec!["nhmmer"];
     args.extend_from_slice(extra_args);
     args.extend_from_slice(&["--tblout", tblout.to_str().unwrap(), hmm, seqdb]);
-    let output = Command::new(binary_path("hmmer"))
+    let output = Command::new(binary_path("tongs"))
         .args(&args)
         .output()
         .expect("failed to run hmmer nhmmer");
@@ -705,7 +705,7 @@ fn run_nhmmscan_tblout_with_args(hmmdb: &str, seqfile: &str, extra_args: &[&str]
     let dir = tempfile::tempdir().unwrap();
     let hmm_copy = dir.path().join("models.hmm");
     std::fs::copy(hmmdb, &hmm_copy).unwrap();
-    let press = Command::new(binary_path("hmmer"))
+    let press = Command::new(binary_path("tongs"))
         .args(["press", "-f", hmm_copy.to_str().unwrap()])
         .output()
         .expect("failed to run hmmer press");
@@ -723,7 +723,7 @@ fn run_nhmmscan_tblout_with_args(hmmdb: &str, seqfile: &str, extra_args: &[&str]
         hmm_copy.to_str().unwrap(),
         seqfile,
     ]);
-    let output = Command::new(binary_path("hmmer"))
+    let output = Command::new(binary_path("tongs"))
         .args(args)
         .output()
         .expect("failed to run hmmer nhmmscan");
@@ -743,7 +743,7 @@ fn run_nhmmscan_dfamtblout_with_args(hmmdb: &str, seqfile: &str, extra_args: &[&
     let dir = tempfile::tempdir().unwrap();
     let hmm_copy = dir.path().join("models.hmm");
     std::fs::copy(hmmdb, &hmm_copy).unwrap();
-    let press = Command::new(binary_path("hmmer"))
+    let press = Command::new(binary_path("tongs"))
         .args(["press", "-f", hmm_copy.to_str().unwrap()])
         .output()
         .expect("failed to run hmmer press");
@@ -761,7 +761,7 @@ fn run_nhmmscan_dfamtblout_with_args(hmmdb: &str, seqfile: &str, extra_args: &[&
         hmm_copy.to_str().unwrap(),
         seqfile,
     ]);
-    let output = Command::new(binary_path("hmmer"))
+    let output = Command::new(binary_path("tongs"))
         .args(args)
         .output()
         .expect("failed to run hmmer nhmmscan");
@@ -859,7 +859,7 @@ fn run_hmmscan_tblout_with_args(hmmdb: &str, seqfile: &str, extra_args: &[&str])
     let dir = tempfile::tempdir().unwrap();
     let hmm_copy = dir.path().join("models.hmm");
     std::fs::copy(hmmdb, &hmm_copy).unwrap();
-    let press = Command::new(binary_path("hmmer"))
+    let press = Command::new(binary_path("tongs"))
         .args(["press", "-f", hmm_copy.to_str().unwrap()])
         .output()
         .expect("failed to run hmmer press");
@@ -877,7 +877,7 @@ fn run_hmmscan_tblout_with_args(hmmdb: &str, seqfile: &str, extra_args: &[&str])
         hmm_copy.to_str().unwrap(),
         seqfile,
     ]);
-    let output = Command::new(binary_path("hmmer"))
+    let output = Command::new(binary_path("tongs"))
         .args(args)
         .output()
         .expect("failed to run hmmer scan");
@@ -935,7 +935,7 @@ fn run_hmmscan_domtblout_with_args(hmmdb: &str, seqfile: &str, extra_args: &[&st
     let dir = tempfile::tempdir().unwrap();
     let hmm_copy = dir.path().join("models.hmm");
     std::fs::copy(hmmdb, &hmm_copy).unwrap();
-    let press = Command::new(binary_path("hmmer"))
+    let press = Command::new(binary_path("tongs"))
         .args(["press", "-f", hmm_copy.to_str().unwrap()])
         .output()
         .expect("failed to run hmmer press");
@@ -953,7 +953,7 @@ fn run_hmmscan_domtblout_with_args(hmmdb: &str, seqfile: &str, extra_args: &[&st
         hmm_copy.to_str().unwrap(),
         seqfile,
     ]);
-    let output = Command::new(binary_path("hmmer"))
+    let output = Command::new(binary_path("tongs"))
         .args(args)
         .output()
         .expect("failed to run hmmer scan");
@@ -1011,7 +1011,7 @@ fn run_hmmscan_pfamtblout_with_args(hmmdb: &str, seqfile: &str, extra_args: &[&s
     let dir = tempfile::tempdir().unwrap();
     let hmm_copy = dir.path().join("models.hmm");
     std::fs::copy(hmmdb, &hmm_copy).unwrap();
-    let press = Command::new(binary_path("hmmer"))
+    let press = Command::new(binary_path("tongs"))
         .args(["press", "-f", hmm_copy.to_str().unwrap()])
         .output()
         .expect("failed to run hmmer press");
@@ -1029,7 +1029,7 @@ fn run_hmmscan_pfamtblout_with_args(hmmdb: &str, seqfile: &str, extra_args: &[&s
         hmm_copy.to_str().unwrap(),
         seqfile,
     ]);
-    let output = Command::new(binary_path("hmmer"))
+    let output = Command::new(binary_path("tongs"))
         .args(args)
         .output()
         .expect("failed to run hmmer scan");
@@ -1083,7 +1083,7 @@ fn run_nhmmer_stdout(hmm: &str, seqdb: &str, extra_args: &[&str]) -> String {
     let mut args = vec!["nhmmer"];
     args.extend_from_slice(extra_args);
     args.extend_from_slice(&[hmm, seqdb]);
-    let output = Command::new(binary_path("hmmer"))
+    let output = Command::new(binary_path("tongs"))
         .args(&args)
         .output()
         .expect("failed to run hmmer nhmmer");
@@ -1105,7 +1105,7 @@ fn run_hmmsearch_domtblout_with_args(hmm: &str, seqdb: &str, extra_args: &[&str]
     let mut args = vec!["search", "--noali"];
     args.extend_from_slice(extra_args);
     args.extend_from_slice(&["--domtblout", domtblout.to_str().unwrap(), hmm, seqdb]);
-    let output = Command::new(binary_path("hmmer"))
+    let output = Command::new(binary_path("tongs"))
         .args(args)
         .output()
         .expect("failed to run hmmer search");
@@ -1149,7 +1149,7 @@ fn run_hmmsearch_pfamtblout_with_args(hmm: &str, seqdb: &str, extra_args: &[&str
     let mut args = vec!["search", "--noali"];
     args.extend_from_slice(extra_args);
     args.extend_from_slice(&["--pfamtblout", pfamtblout.to_str().unwrap(), hmm, seqdb]);
-    let output = Command::new(binary_path("hmmer"))
+    let output = Command::new(binary_path("tongs"))
         .args(args)
         .output()
         .expect("failed to run hmmer search");
@@ -1621,7 +1621,7 @@ fn test_nhmmer_nhmmscan_suppress_runtime_footer_lines() {
     let dir = tempfile::tempdir().unwrap();
     let ndb = dir.path().join("ndb.hmm");
     std::fs::copy(&hmm, &ndb).unwrap();
-    let press = Command::new(binary_path("hmmer"))
+    let press = Command::new(binary_path("tongs"))
         .args(["hmmpress", "-f", ndb.to_str().unwrap()])
         .output()
         .expect("failed to run hmmpress");
@@ -1630,7 +1630,7 @@ fn test_nhmmer_nhmmscan_suppress_runtime_footer_lines() {
         "hmmpress failed: {}",
         String::from_utf8_lossy(&press.stderr)
     );
-    let scan = Command::new(binary_path("hmmer"))
+    let scan = Command::new(binary_path("tongs"))
         .args(["nhmmscan", ndb.to_str().unwrap(), &target])
         .output()
         .expect("failed to run nhmmscan");
@@ -1861,7 +1861,7 @@ fn test_makehmmerdb_ecoli_slice_option_output_matches_bundled_c_bytes() {
     let c_fm = dir.path().join("c.ecoli250k.hmmerdb");
     let seqdb = test_path("external/new_real/derived/GCF_000005845.2_ASM584v2_first250k.fna");
 
-    let rust = Command::new(binary_path("hmmer"))
+    let rust = Command::new(binary_path("tongs"))
         .args([
             "makehmmerdb",
             "--informat",
@@ -1914,7 +1914,7 @@ fn test_makehmmerdb_ecoli_slice_fwd_only_cstream_matches_bundled_c_bytes() {
     let c_fm = dir.path().join("c.ecoli250k.fwd.hmmerdb");
     let seqdb = test_path("external/new_real/derived/GCF_000005845.2_ASM584v2_first250k.fna");
 
-    let rust = Command::new(binary_path("hmmer"))
+    let rust = Command::new(binary_path("tongs"))
         .args([
             "makehmmerdb",
             "--dna",
@@ -1968,7 +1968,7 @@ fn test_makehmmerdb_ecoli_genome_gzip_block_options_match_bundled_c_bytes() {
     let c_fm = dir.path().join("c.ecoli_genome.hmmerdb");
     let seqdb = test_path("external/new_real/dna/GCF_000005845.2_ASM584v2_genomic.fna.gz");
 
-    let rust = Command::new(binary_path("hmmer"))
+    let rust = Command::new(binary_path("tongs"))
         .args([
             "makehmmerdb",
             "--dna",
@@ -2025,7 +2025,7 @@ fn test_makehmmerdb_yeast_gzip_multirecord_matches_bundled_c_bytes() {
     let seqdb =
         test_path("external/realistic/dna/Saccharomyces_cerevisiae.R64-1-1.dna.toplevel.fa.gz");
 
-    let rust = Command::new(binary_path("hmmer"))
+    let rust = Command::new(binary_path("tongs"))
         .args([
             "makehmmerdb",
             "--dna",
@@ -2203,7 +2203,7 @@ fn test_realistic_dnaj_hmmbuild_name_summary_matches_bundled_c() {
     let c_hmm = dir.path().join("c_DnaJ_named.hmm");
     let msa = test_path("external/realistic/pfam/PF00226_DnaJ.seed.sto");
 
-    let rust = Command::new(binary_path("hmmer"))
+    let rust = Command::new(binary_path("tongs"))
         .args([
             "build",
             "-n",
@@ -2406,7 +2406,7 @@ fn test_dnaj_hmmsim_forward_bgcomp_no_lengthmodel_artifacts_match_bundled_c() {
         rust_out.to_str().unwrap(),
         hmm.to_str().unwrap(),
     ]);
-    let rust = Command::new(binary_path("hmmer"))
+    let rust = Command::new(binary_path("tongs"))
         .args(rust_args)
         .output()
         .expect("failed to run hmmer sim");
@@ -2503,7 +2503,7 @@ fn test_realistic_dnaj_hmmsearch_max_yeast_proteome_matches_bundled_c_rows() {
     );
     let seqdb = test_path("external/realistic/protein/uniprot_UP000002311_yeast.fasta");
 
-    let rust = Command::new(binary_path("hmmer"))
+    let rust = Command::new(binary_path("tongs"))
         .args([
             "search",
             "--max",
@@ -2893,7 +2893,7 @@ fn test_hatpase_hmmbuild_resaved_msa_matches_bundled_c() {
     let c_sto = dir.path().join("c_resaved.sto");
     let msa = test_path("external/new_real/pfam/PF02518_HATPase_c.seed.sto");
 
-    let rust = Command::new(binary_path("hmmer"))
+    let rust = Command::new(binary_path("tongs"))
         .args([
             "build",
             "--amino",
@@ -2967,7 +2967,7 @@ fn test_response_reg_hmmbuild_resaved_blosum_weights_match_bundled_c() {
         rust_hmm.to_str().unwrap(),
         &msa,
     ]);
-    let rust = Command::new(binary_path("hmmer"))
+    let rust = Command::new(binary_path("tongs"))
         .args(rust_args)
         .output()
         .expect("failed to run hmmer build -O with BLOSUM weights");
@@ -3393,7 +3393,7 @@ fn test_dnak_phmmer_alignment_pp_cons_matches_bundled_c() {
         &query,
         &seqdb,
     ]);
-    let rust = Command::new(binary_path("hmmer"))
+    let rust = Command::new(binary_path("tongs"))
         .args(rust_args)
         .output()
         .expect("failed to run hmmer phmmer -A");
@@ -3446,7 +3446,7 @@ fn test_phmmer_dnak_ecoli_first500_alignment_wraps_like_bundled_c() {
     );
     let query = test_path("external/new_real/queries/sp_P0A6Y8_DNAK_ECOLI.fa");
 
-    let rust = Command::new(binary_path("hmmer"))
+    let rust = Command::new(binary_path("tongs"))
         .args([
             "phmmer",
             "--max",
@@ -3521,7 +3521,7 @@ fn test_jackhmmer_dnak_ecoli_first800_chkhmm_matches_bundled_c() {
     );
     let query = test_path("external/new_real/queries/sp_P0A6Y8_DNAK_ECOLI.fa");
 
-    let rust = Command::new(binary_path("hmmer"))
+    let rust = Command::new(binary_path("tongs"))
         .args([
             "jackhmmer",
             "-N",
@@ -4458,7 +4458,7 @@ fn test_nhmmer_ecori_requires_explicit_dna_and_runs_cleanly() {
 fn test_hmmsearch_max_uses_c_like_thresholds_and_domains() {
     let dir = tempfile::tempdir().unwrap();
     let domtblout = dir.path().join("domains.tbl");
-    let output = Command::new(binary_path("hmmer"))
+    let output = Command::new(binary_path("tongs"))
         .args([
             "search",
             "--max",
@@ -5071,7 +5071,7 @@ fn test_pfam_per_query_hit_counts_match_golden_for_all_families() {
 
 fn build_fmdb(dir: &std::path::Path, fasta_rel: &str) -> String {
     let db = dir.join("target.hmmerdb");
-    let out = Command::new(binary_path("hmmer"))
+    let out = Command::new(binary_path("tongs"))
         .args([
             "makehmmerdb",
             "--dna",
@@ -5310,7 +5310,7 @@ fn assert_multi_segment_fm_parity(hmm_rel: &str, source_rel: &str, seg_len: usiz
 
     // makehmmerdb on the multi-segment FASTA (multiple FM segments).
     let db = dir.path().join("multi.hmmerdb");
-    let out = Command::new(binary_path("hmmer"))
+    let out = Command::new(binary_path("tongs"))
         .args([
             "makehmmerdb",
             "--dna",
@@ -5476,7 +5476,7 @@ fn test_nhmmer_accepts_space_separated_negative_threshold() {
     // parser must too (regression for allow_hyphen_values on the threshold args).
     let dir = tempfile::tempdir().unwrap();
     let tblout = dir.path().join("t.tbl");
-    let output = Command::new(binary_path("hmmer"))
+    let output = Command::new(binary_path("tongs"))
         .args([
             "nhmmer",
             "--noali",
@@ -5511,7 +5511,7 @@ fn test_nhmmer_tformat_fasta_rejects_fmindex_like_bundled_c() {
         &fm,
     );
 
-    let rust = Command::new(binary_path("hmmer"))
+    let rust = Command::new(binary_path("tongs"))
         .args([
             "nhmmer",
             "--tformat",
@@ -5554,7 +5554,7 @@ fn test_nhmmer_f1_f2_f3_accept_hyphen_values() {
     for flag in ["--F1", "--F2", "--F3"] {
         let dir = tempfile::tempdir().unwrap();
         let tblout = dir.path().join("t.tbl");
-        let output = Command::new(binary_path("hmmer"))
+        let output = Command::new(binary_path("tongs"))
             .args([
                 "nhmmer",
                 "--noali",
@@ -5681,7 +5681,7 @@ fn test_single_seq_dna_model_maxl_matches_bundled_c() {
     let rust_hmm = dir.path().join("rust.hmm");
     let c_hmm = dir.path().join("c.hmm");
 
-    let rust = Command::new(binary_path("hmmer"))
+    let rust = Command::new(binary_path("tongs"))
         .args([
             "build",
             "--informat",
@@ -5740,7 +5740,7 @@ fn assert_singlemx_model_matches_c(extra_rust: &[&str], extra_c: &[&str], query_
     rust_args.extend(extra_rust.iter().map(|s| s.to_string()));
     rust_args.push(rust_hmm.to_str().unwrap().to_string());
     rust_args.push(query.clone());
-    let rust = Command::new(binary_path("hmmer"))
+    let rust = Command::new(binary_path("tongs"))
         .args(&rust_args)
         .output()
         .expect("failed to run hmmer build");
