@@ -7,14 +7,10 @@ use clap::Parser;
 use rayon::prelude::*;
 
 use tongs::alphabet::Alphabet;
-use tongs::bg::Bg;
 use tongs::hmmfile;
 use tongs::logsum;
-use tongs::pipeline::Pipeline;
-use tongs::profile::{self, Profile, P7_LOCAL};
 use tongs::search::{scan_all, Query, Scan};
 use tongs::sequence::SequenceFormat;
-use tongs::simd::oprofile::OProfile;
 
 mod options;
 mod pfam;
@@ -480,16 +476,8 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
 }
 
 fn configure<'a>(hmm: &'a tongs::Hmm, args: &Args) -> Query<'a> {
-    let abc = Alphabet::new(hmm.abc_type);
-    let mut bg = Bg::new(&abc);
-    let mut gm = Profile::new(hmm.m, &abc);
-    profile::profile_config(hmm, &bg, &mut gm, 100, P7_LOCAL);
-    bg.set_filter(hmm.m, &hmm.compo);
-
-    let om = OProfile::convert(&gm);
-
-    let mut pli = Pipeline::new();
-    pli.new_model(&gm);
+    let mut query = Query::new(hmm);
+    let pli = &mut query.pli;
 
     let effective_f1 = if args.max { 1.0 } else { args.f1 };
     let effective_f2 = if args.max { 1.0 } else { args.f2 };
@@ -557,13 +545,7 @@ fn configure<'a>(hmm: &'a tongs::Hmm, args: &Args) -> Query<'a> {
     }
     pli.do_alignment = true;
     pli.do_alignment_display = !args.noali || args.ali_outfile.is_some();
-    Query {
-        hmm,
-        gm,
-        om,
-        bg,
-        pli,
-    }
+    query
 }
 
 pub(crate) fn create_output_file_or_exit(

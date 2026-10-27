@@ -77,7 +77,7 @@ struct AlignmentRow {
     ppline: Option<String>,
 }
 
-struct TextMsa {
+pub(crate) struct TextMsa {
     rows: Vec<AlignmentRow>,
     rfline: String,
     pp_cons: String,
@@ -438,7 +438,7 @@ fn write_stockholm_blocked(out: &mut dyn Write, msa: &TextMsa, cpl: usize) {
 /// Emit the alignment in A2M format: consensus columns uppercase / `-`,
 /// insert columns lowercase (insert gaps suppressed); `O`/`o` mapped to `X`/`x`
 /// for amino alphabets.
-fn write_a2m(out: &mut dyn Write, msa: &TextMsa, is_amino: bool) {
+pub(crate) fn write_a2m(out: &mut dyn Write, msa: &TextMsa, is_amino: bool) {
     for row in &msa.rows {
         // esl_msafile_a2m_Write (esl_msafile_a2m.c:418-420): ">name", then
         // " acc" if the sequence has an accession, then " desc" if it has a
@@ -628,7 +628,7 @@ fn trace_posteriors(tr: &tongs::trace::Trace, pp: &Gmx) -> Vec<f32> {
     v
 }
 
-fn build_text_msa(
+pub(crate) fn build_text_msa(
     hmm: &tongs::hmm::Hmm,
     abc: &Alphabet,
     bg: &Bg,

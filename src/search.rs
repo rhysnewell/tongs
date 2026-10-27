@@ -2,10 +2,11 @@ use std::cmp::Reverse;
 
 use rayon::prelude::*;
 
+use crate::alphabet::Alphabet;
 use crate::bg::Bg;
 use crate::hmm::Hmm;
 use crate::pipeline::Pipeline;
-use crate::profile::{reconfig_length, Profile, P7P_NXSTATES, P7P_NXTRANS};
+use crate::profile::{profile_config, reconfig_length, Profile, P7P_NXSTATES, P7P_NXTRANS, P7_LOCAL};
 use crate::sequence::Sequence;
 use crate::simd::oprofile::{OProfile, P7O_NXSTATES, P7O_NXTRANS};
 use crate::tophits::{Hit, TopHits};
@@ -83,7 +84,27 @@ impl Lengthed {
 
 const LENGTH_SLOTS: usize = 1024;
 
-impl Query<'_> {
+impl<'a> Query<'a> {
+    // Configured under the float mode the scan runs in, as hmmsearch configures on its workers.
+    pub fn new(hmm: &'a Hmm) -> Self {
+        let _mode = FlushToZero::enter();
+        let abc = Alphabet::new(hmm.abc_type);
+        let mut bg = Bg::new(&abc);
+        let mut gm = Profile::new(hmm.m, &abc);
+        profile_config(hmm, &bg, &mut gm, 100, P7_LOCAL);
+        bg.set_filter(hmm.m, &hmm.compo);
+        let om = OProfile::convert(&gm);
+        let mut pli = Pipeline::new();
+        pli.new_model(&gm);
+        Query {
+            hmm,
+            gm,
+            om,
+            bg,
+            pli,
+        }
+    }
+
     pub fn scan(&self, targets: &[Sequence], first: u64) -> Scan {
         let _mode = FlushToZero::enter();
         let mut pli = self.pli.fork();

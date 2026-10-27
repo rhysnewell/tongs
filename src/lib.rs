@@ -49,6 +49,7 @@
 // in from the binary) can keep using their existing `tongs::` paths.
 extern crate self as tongs;
 
+pub mod align;
 pub mod alphabet;
 pub mod bg;
 pub mod builder;
