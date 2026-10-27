@@ -14,25 +14,28 @@ fn outcome(result: &SsvResult) -> Option<u32> {
 // agree with the full MSV recurrence it stands in for.
 #[test]
 fn shortcut_matches_msv_at_every_lane_width() {
-    if !is_x86_feature_detected!("avx2") {
-        return;
-    }
+    #[cfg(target_arch = "x86_64")]
+    let widths = if is_x86_feature_detected!("avx2") { vec![16, 32] } else { vec![16] };
+    #[cfg(not(target_arch = "x86_64"))]
+    let widths = vec![16];
     let mut answered = 0;
     let targets = proteins();
     for (name, mut om) in profiles() {
-        let wide = SsvProfile::striped(&om.sbv, om.m, 32);
-        let narrow = SsvProfile::striped(&om.sbv, om.m, 16);
+        let shortcuts: Vec<_> =
+            widths.iter().map(|&lanes| SsvProfile::striped(&om.sbv, om.m, lanes)).collect();
         let mut dp = Vec::new();
         for sq in &targets {
             om.reconfig_length(sq.n as i32);
-            let short = wide.score(&sq.dsq, sq.n, &om);
-            assert_eq!(
-                outcome(&short),
-                outcome(&narrow.score(&sq.dsq, sq.n, &om)),
-                "{} {}",
-                name,
-                sq.name
-            );
+            let short = shortcuts[0].score(&sq.dsq, sq.n, &om);
+            for other in &shortcuts[1..] {
+                assert_eq!(
+                    outcome(&short),
+                    outcome(&other.score(&sq.dsq, sq.n, &om)),
+                    "{} {}",
+                    name,
+                    sq.name
+                );
+            }
             let full = unsafe { p7_msv_filter_dp_only_rust_helper(&sq.dsq, sq.n, &om, &mut dp) };
             match (short, full) {
                 (SsvResult::Ok(short), MsvResult::Ok(long)) => {

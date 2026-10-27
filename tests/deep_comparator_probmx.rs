@@ -1,4 +1,4 @@
-#![cfg(target_arch = "x86_64")]
+#![cfg(striped)]
 
 use std::path::Path;
 use tongs::{alphabet::Alphabet, bg::Bg, hmmfile, profile, simd};
@@ -82,10 +82,6 @@ fn assert_f64_slice_exact(label: &str, got: &[f64], expected: &[f64]) {
 
 #[test]
 fn resized_probmx_overwrites_poisoned_storage() {
-    if !std::is_x86_feature_detected!("sse2") {
-        return;
-    }
-
     let seq_len = 257;
     let (dsq, om) = configured_profile(seq_len);
     let mut clean_fwd = simd::probmx::ProbMx::new_full(om.m, seq_len);
