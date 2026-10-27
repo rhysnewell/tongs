@@ -560,8 +560,7 @@ fn align_traces_optimized(
             unsafe { tongs::simd::fwd_filter::forward_parser_pmx(&sq.dsq, sq.n, &om, &mut fwd) };
         unsafe {
             tongs::simd::bck_filter::backward_parser_pmx(&sq.dsq, sq.n, &om, fwd_sc, &mut bck);
-            tongs::simd::optacc::posterior_decoding_pmx(&fwd, &bck, &om, &mut pp);
-            tongs::simd::optacc::optimal_accuracy_pmx(&om, &pp, &mut oa);
+            tongs::simd::optacc::decode_and_fill(&fwd, &bck, &om, &mut pp, &mut oa);
         }
         let tr = unsafe { tongs::simd::optacc::oa_trace_pmx(&om, &pp, &oa) };
         let njc_loop = [

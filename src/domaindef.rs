@@ -594,15 +594,11 @@ fn score_domain_envelope(
                         // trace boundaries. (Previously alignment_display path
                         // fell back to generic OA which drifted by 1 residue.)
                         unsafe {
-                            crate::simd::optacc::posterior_decoding_pmx(
+                            simd_oasc = Some(crate::simd::optacc::decode_and_fill(
                                 &scratch.fwd_pmx,
                                 &scratch.bck_pmx,
                                 env_om,
                                 &mut scratch.pp_pmx,
-                            );
-                            simd_oasc = Some(crate::simd::optacc::optimal_accuracy_pmx(
-                                env_om,
-                                &scratch.pp_pmx,
                                 &mut scratch.oa_pmx,
                             ));
                             simd_oa_coords = crate::simd::optacc::oa_trace_coords_pmx(
@@ -987,18 +983,12 @@ fn score_domain_envelope(
                                     );
                                 }
                             }
-                            unsafe {
-                                crate::simd::optacc::posterior_decoding_pmx(
+                            let trim_oasc = unsafe {
+                                crate::simd::optacc::decode_and_fill(
                                     &scratch.fwd_pmx,
                                     &scratch.bck_pmx,
                                     &trim_om,
                                     &mut scratch.pp_pmx,
-                                );
-                            }
-                            let trim_oasc = unsafe {
-                                crate::simd::optacc::optimal_accuracy_pmx(
-                                    &trim_om,
-                                    &scratch.pp_pmx,
                                     &mut scratch.oa_pmx,
                                 )
                             };
