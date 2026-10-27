@@ -69,6 +69,7 @@ pub mod pipeline;
 pub mod pressed;
 pub mod prior;
 pub mod profile;
+pub mod search;
 pub mod seqmodel;
 pub mod sequence;
 pub mod simd;
