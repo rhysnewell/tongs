@@ -1286,9 +1286,11 @@ pub fn oprofile_from_pressed_records(
     #[cfg(target_arch = "x86_64")]
     let tfv_a: Vec<AlignedF32x4> = tfv.iter().copied().map(AlignedF32x4::from_array).collect();
 
+    let ssv = crate::simd::ssv::SsvProfile::new(&sbv, msv.m);
     Ok(OProfile {
         rbv,
         sbv,
+        ssv,
         tbm_b: msv.tbm_b,
         tec_b: msv.tec_b,
         tjb_b: msv.tjb_b,

@@ -4,6 +4,7 @@
 
 use crate::alphabet::Dsq;
 use crate::simd::oprofile::{nqb, OProfile};
+use crate::simd::ssv::SsvResult;
 
 #[cfg(target_arch = "x86_64")]
 use std::arch::x86_64::*;
@@ -32,14 +33,8 @@ pub enum MsvResult {
 pub unsafe fn p7_msv_filter(dsq: &[Dsq], l: usize, om: &OProfile) -> MsvResult {
     let q_count = nqb(om.m);
 
-    // C p7_MSVFilter first tries the highly-optimized SSV filter; if it returns
-    // a definitive result (eslOK score or eslERANGE overflow) we return it
-    // directly. Only when SSV returns eslENORESULT do we run the full MSV DP.
-    // (msvfilter.c:102-104)
-    match super::ssv_filter::ssv_filter_q17(dsq, l, om) {
-        super::ssv_filter::SsvResult::Ok(sc) => return MsvResult::Ok(sc),
-        super::ssv_filter::SsvResult::Overflow => return MsvResult::Overflow,
-        super::ssv_filter::SsvResult::NoResult => {}
+    if let Some(result) = ssv_shortcut(dsq, l, om) {
+        return result;
     }
 
     let mut dp: Vec<__m128i> = vec![_mm_setzero_si128(); q_count];
@@ -125,11 +120,14 @@ pub unsafe fn p7_msv_filter(dsq: &[Dsq], l: usize, om: &OProfile) -> MsvResult {
     MsvResult::Ok(sc)
 }
 
-/// Rust helper variant that reuses a caller-owned single DP row.
-///
-/// Identical math to [`p7_msv_filter`] but skips the per-call allocation by reusing the
-/// caller's `dp` vector. Keep tracehash builds on `p7_msv_filter()` unless a trace proves
-/// this allocation change is harmless for exact instrumentation-sensitive comparisons.
+fn ssv_shortcut(dsq: &[Dsq], l: usize, om: &OProfile) -> Option<MsvResult> {
+    match om.ssv.as_ref()?.score(dsq, l, om) {
+        SsvResult::Ok(sc) => Some(MsvResult::Ok(sc)),
+        SsvResult::Overflow => Some(MsvResult::Overflow),
+        SsvResult::NoResult => None,
+    }
+}
+
 #[target_feature(enable = "sse2")]
 pub unsafe fn p7_msv_filter_with_scratch_rust_helper(
     dsq: &[Dsq],
@@ -137,25 +135,9 @@ pub unsafe fn p7_msv_filter_with_scratch_rust_helper(
     om: &OProfile,
     dp: &mut Vec<__m128i>,
 ) -> MsvResult {
-    // C p7_MSVFilter first tries the highly-optimized SSV filter; if it returns
-    // a definitive result (eslOK score or eslERANGE overflow) we return it
-    // directly. Only when SSV returns eslENORESULT do we run the full MSV DP.
-    // (msvfilter.c:102-104)
-    //
-    // LANDMINE (see TODO.md "Known Bad Or Neutral Experiments"): many earlier
-    // attempts to add a general SSV pre-filter into this hot MSV path were
-    // REVERTED because carrying SSV code/`sbv` storage here perturbed downstream
-    // exact trace hashes (score_domain_null2, define_domains_summary, pipeline
-    // score probes) or were slower. `ssv_filter_q17` is the *accepted* narrow
-    // shortcut: it is restricted to the reference shape (Q=17, band widths 8/9),
-    // returns NoResult on any unsupported shape, and is tracehash-parity verified.
-    // Do NOT broaden this into a generic SSV port without re-verifying trace parity.
-    match super::ssv_filter::ssv_filter_q17(dsq, l, om) {
-        super::ssv_filter::SsvResult::Ok(sc) => return MsvResult::Ok(sc),
-        super::ssv_filter::SsvResult::Overflow => return MsvResult::Overflow,
-        super::ssv_filter::SsvResult::NoResult => {}
+    if let Some(result) = ssv_shortcut(dsq, l, om) {
+        return result;
     }
-
     p7_msv_filter_dp_only_rust_helper(dsq, l, om, dp)
 }
 

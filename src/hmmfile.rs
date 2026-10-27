@@ -2100,10 +2100,14 @@ mod tests {
         assert_eq!(parse_cutoff_value("TC", "20.7;").unwrap(), 20.7);
         assert_eq!(parse_cutoff_value("NC", "29.6").unwrap(), 29.6);
 
-        let text = include_str!("../hmmer/tutorial/fn3.hmm")
-            .replace("GA    8.00 7.20", "GA    22;")
-            .replace("TC    8.00 7.20", "TC    23.5;")
-            .replace("NC    7.90 7.90", "NC    -1.25;");
+        let text = std::fs::read_to_string(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/hmmer/tutorial/fn3.hmm"
+        ))
+        .unwrap()
+        .replace("GA    8.00 7.20", "GA    22;")
+        .replace("TC    8.00 7.20", "TC    23.5;")
+        .replace("NC    7.90 7.90", "NC    -1.25;");
 
         let hmms = read_hmms_from_str(&text).unwrap();
         let hmm = &hmms[0];
