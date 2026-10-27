@@ -29,11 +29,24 @@ pub enum VitResult {
 /// range so the int16 arithmetic doesn't underflow.
 #[cfg(striped)]
 pub unsafe fn p7_viterbi_filter(dsq: &[Dsq], l: usize, om: &OProfile) -> VitResult {
+    p7_viterbi_filter_with_scratch(dsq, l, om, &mut Vec::new())
+}
+
+#[cfg(striped)]
+pub unsafe fn p7_viterbi_filter_with_scratch(
+    dsq: &[Dsq],
+    l: usize,
+    om: &OProfile,
+    dp: &mut Vec<__m128i>,
+) -> VitResult {
     let q_count = nqw(om.m);
     let nscells = 3; // M, D, I per q
 
     // DP row: dp[q*3+0]=M, dp[q*3+1]=D, dp[q*3+2]=I
-    let mut dp: Vec<__m128i> = vec![_mm_set1_epi16(-32768); q_count * nscells];
+    dp.clear();
+    dp.resize(q_count * nscells, _mm_set1_epi16(-32768));
+    let cells = dp.as_mut_ptr();
+    let twv = om.twv.as_ptr().cast::<__m128i>();
 
     let neg_inf_v = {
         let v = _mm_set1_epi16(-32768);
@@ -47,17 +60,17 @@ pub unsafe fn p7_viterbi_filter(dsq: &[Dsq], l: usize, om: &OProfile) -> VitResu
 
     macro_rules! mmx {
         ($q:expr) => {
-            dp[$q * nscells + 0]
+            *cells.add($q * nscells)
         };
     }
     macro_rules! dmx {
         ($q:expr) => {
-            dp[$q * nscells + 1]
+            *cells.add($q * nscells + 1)
         };
     }
     macro_rules! imx {
         ($q:expr) => {
-            dp[$q * nscells + 2]
+            *cells.add($q * nscells + 2)
         };
     }
 
@@ -67,7 +80,7 @@ pub unsafe fn p7_viterbi_filter(dsq: &[Dsq], l: usize, om: &OProfile) -> VitResu
         // every valid digital code is < Kp, so the row always exists and the
         // recurrence (and per-row special-state updates) must advance.
         let xi = dsq[i] as usize;
-        let rsc = &om.rwv[xi];
+        let rsc = om.rwv[xi].as_ptr().cast::<__m128i>();
 
         let mut dcv = _mm_set1_epi16(-32768);
         let mut xev = _mm_set1_epi16(-32768);
@@ -86,13 +99,13 @@ pub unsafe fn p7_viterbi_filter(dsq: &[Dsq], l: usize, om: &OProfile) -> VitResu
 
         for q in 0..q_count {
             // Match state: max(B+tBM, M+tMM, I+tIM, D+tDM) + emission
-            let tsc_bm = _mm_loadu_si128(om.twv[tsc_idx].as_ptr() as *const __m128i);
+            let tsc_bm = _mm_loadu_si128(twv.add(tsc_idx));
             tsc_idx += 1;
-            let tsc_mm = _mm_loadu_si128(om.twv[tsc_idx].as_ptr() as *const __m128i);
+            let tsc_mm = _mm_loadu_si128(twv.add(tsc_idx));
             tsc_idx += 1;
-            let tsc_im = _mm_loadu_si128(om.twv[tsc_idx].as_ptr() as *const __m128i);
+            let tsc_im = _mm_loadu_si128(twv.add(tsc_idx));
             tsc_idx += 1;
-            let tsc_dm = _mm_loadu_si128(om.twv[tsc_idx].as_ptr() as *const __m128i);
+            let tsc_dm = _mm_loadu_si128(twv.add(tsc_idx));
             tsc_idx += 1;
 
             let mut sv = _mm_adds_epi16(xbv, tsc_bm);
@@ -100,7 +113,7 @@ pub unsafe fn p7_viterbi_filter(dsq: &[Dsq], l: usize, om: &OProfile) -> VitResu
             sv = _mm_max_epi16(sv, _mm_adds_epi16(ipv, tsc_im));
             sv = _mm_max_epi16(sv, _mm_adds_epi16(dpv, tsc_dm));
 
-            let rsc_v = _mm_loadu_si128(rsc[q].as_ptr() as *const __m128i);
+            let rsc_v = _mm_loadu_si128(rsc.add(q));
             sv = _mm_adds_epi16(sv, rsc_v);
             xev = _mm_max_epi16(xev, sv);
 
@@ -114,15 +127,15 @@ pub unsafe fn p7_viterbi_filter(dsq: &[Dsq], l: usize, om: &OProfile) -> VitResu
             dmx!(q) = dcv;
 
             // Calculate next D partially (M->D only)
-            let tsc_md = _mm_loadu_si128(om.twv[tsc_idx].as_ptr() as *const __m128i);
+            let tsc_md = _mm_loadu_si128(twv.add(tsc_idx));
             tsc_idx += 1;
             dcv = _mm_adds_epi16(sv, tsc_md);
             dmaxv = _mm_max_epi16(dcv, dmaxv);
 
             // Calculate and store I
-            let tsc_mi = _mm_loadu_si128(om.twv[tsc_idx].as_ptr() as *const __m128i);
+            let tsc_mi = _mm_loadu_si128(twv.add(tsc_idx));
             tsc_idx += 1;
-            let tsc_ii = _mm_loadu_si128(om.twv[tsc_idx].as_ptr() as *const __m128i);
+            let tsc_ii = _mm_loadu_si128(twv.add(tsc_idx));
             tsc_idx += 1;
             let isv = _mm_max_epi16(_mm_adds_epi16(mpv, tsc_mi), _mm_adds_epi16(ipv, tsc_ii));
             imx!(q) = isv;
@@ -150,7 +163,7 @@ pub unsafe fn p7_viterbi_filter(dsq: &[Dsq], l: usize, om: &OProfile) -> VitResu
 
             for q in 0..q_count {
                 dmx!(q) = _mm_max_epi16(dcv, dmx!(q));
-                let tsc_dd = _mm_loadu_si128(om.twv[dd_offset + q].as_ptr() as *const __m128i);
+                let tsc_dd = _mm_loadu_si128(twv.add(dd_offset + q));
                 dcv = _mm_adds_epi16(dmx!(q), tsc_dd);
             }
 
@@ -165,7 +178,7 @@ pub unsafe fn p7_viterbi_filter(dsq: &[Dsq], l: usize, om: &OProfile) -> VitResu
                         break;
                     }
                     dmx!(q) = _mm_max_epi16(dcv, dmx!(q));
-                    let tsc_dd = _mm_loadu_si128(om.twv[dd_offset + q].as_ptr() as *const __m128i);
+                    let tsc_dd = _mm_loadu_si128(twv.add(dd_offset + q));
                     dcv = _mm_adds_epi16(dmx!(q), tsc_dd);
                 }
                 if broke {

@@ -83,6 +83,8 @@ pub struct Pipeline {
     msv_dp: Vec<crate::simd::sse::__m128i>,
     #[cfg(target_arch = "x86_64")]
     vit_dp: Vec<std::arch::x86_64::__m256i>,
+    #[cfg(all(striped, not(target_arch = "x86_64")))]
+    vit_dp: Vec<crate::simd::sse::__m128i>,
     #[cfg(striped)]
     fwd_dp: Vec<crate::simd::sse::__m128>,
     #[cfg(striped)]
@@ -133,7 +135,7 @@ impl Pipeline {
             evparam: [0.0; 6],
             #[cfg(striped)]
             msv_dp: Vec::new(),
-            #[cfg(target_arch = "x86_64")]
+            #[cfg(striped)]
             vit_dp: Vec::new(),
             #[cfg(striped)]
             fwd_dp: Vec::new(),
@@ -160,7 +162,7 @@ impl Pipeline {
             n_targets: 0,
             #[cfg(striped)]
             msv_dp: Vec::new(),
-            #[cfg(target_arch = "x86_64")]
+            #[cfg(striped)]
             vit_dp: Vec::new(),
             #[cfg(striped)]
             fwd_dp: Vec::new(),

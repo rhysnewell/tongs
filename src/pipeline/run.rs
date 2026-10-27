@@ -6,8 +6,10 @@ use crate::sequence::Sequence;
 #[cfg(striped)]
 use crate::simd::msv_filter::MsvResult;
 use crate::simd::oprofile::OProfile;
+#[cfg(target_arch = "x86_64")]
+use crate::simd::vit_filter::p7_viterbi_filter;
 #[cfg(striped)]
-use crate::simd::vit_filter::{p7_viterbi_filter, VitResult};
+use crate::simd::vit_filter::VitResult;
 use crate::stats;
 use crate::tophits::*;
 use crate::util::cmath::{c_exp_f64, c_log_f64};
@@ -125,7 +127,14 @@ impl Pipeline {
                         None => unsafe { p7_viterbi_filter(&sq.dsq, l, om) },
                     };
                     #[cfg(not(target_arch = "x86_64"))]
-                    let vit_result = unsafe { p7_viterbi_filter(&sq.dsq, l, om) };
+                    let vit_result = unsafe {
+                        crate::simd::vit_filter::p7_viterbi_filter_with_scratch(
+                            &sq.dsq,
+                            l,
+                            om,
+                            &mut self.vit_dp,
+                        )
+                    };
                     vit_sc = match vit_result {
                         VitResult::Ok(sc) => sc,
                         VitResult::Overflow => f32::INFINITY,
