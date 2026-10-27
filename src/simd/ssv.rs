@@ -112,7 +112,7 @@ macro_rules! ssv_step {
         let rsc = $rsc;
         $(
             $sv[$b] = $subs($sv[$b], $load(rsc.add($b)));
-            $xev = $max($xev, $sv[$b]);
+            $xev[$b & 3] = $max($xev[$b & 3], $sv[$b]);
         )*
     }};
 }
@@ -150,40 +150,41 @@ macro_rules! ssv_bands {
                 big_q: usize,
                 q: usize,
                 beginv: $vec,
-                mut xev: $vec,
+                xev: $vec,
             ) -> $vec {
                 let mut sv = [beginv; $w];
+                let mut acc = [xev; 4];
                 let row = |i: usize| scores.add(*dsq.add(i) as usize * width);
                 let mut i = 0;
                 while i < l && i < big_q - q - $w {
-                    ssv_step!(($subs, $max, $load), sv, xev, row(i).add(i + q), $bs);
+                    ssv_step!(($subs, $max, $load), sv, acc, row(i).add(i + q), $bs);
                     i += 1;
                 }
                 i = big_q - q - $w;
                 'first: {
-                    ssv_turn!(($subs, $max, $load), $wrap, sv, xev, beginv, row, i, big_q, l, 'first, $bs, $rs);
+                    ssv_turn!(($subs, $max, $load), $wrap, sv, acc, beginv, row, i, big_q, l, 'first, $bs, $rs);
                 }
                 let mut i2 = big_q - q;
                 while i2 + big_q < l {
                     for ii in 0..big_q - $w {
-                        ssv_step!(($subs, $max, $load), sv, xev, row(i2 + ii).add(ii), $bs);
+                        ssv_step!(($subs, $max, $load), sv, acc, row(i2 + ii).add(ii), $bs);
                     }
                     i = i2 + big_q - $w;
                     'middle: {
-                        ssv_turn!(($subs, $max, $load), $wrap, sv, xev, beginv, row, i, big_q, usize::MAX, 'middle, $bs, $rs);
+                        ssv_turn!(($subs, $max, $load), $wrap, sv, acc, beginv, row, i, big_q, usize::MAX, 'middle, $bs, $rs);
                     }
                     i2 += big_q;
                 }
                 let mut ii = 0;
                 while i2 + ii < l && ii < big_q - $w {
-                    ssv_step!(($subs, $max, $load), sv, xev, row(i2 + ii).add(ii), $bs);
+                    ssv_step!(($subs, $max, $load), sv, acc, row(i2 + ii).add(ii), $bs);
                     ii += 1;
                 }
                 i = i2 + ii;
                 'last: {
-                    ssv_turn!(($subs, $max, $load), $wrap, sv, xev, beginv, row, i, big_q, l, 'last, $bs, $rs);
+                    ssv_turn!(($subs, $max, $load), $wrap, sv, acc, beginv, row, i, big_q, l, 'last, $bs, $rs);
                 }
-                xev
+                $max($max(acc[0], acc[1]), $max(acc[2], acc[3]))
             }
         )*
 
