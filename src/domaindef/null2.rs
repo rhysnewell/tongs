@@ -1,4 +1,5 @@
 use crate::alphabet::{Alphabet, Dsq};
+use crate::simd::sse::*;
 use crate::util::cmath::c_logf_to_f32;
 
 pub(super) fn null2_by_trace_striped(
@@ -9,7 +10,7 @@ pub(super) fn null2_by_trace_striped(
 ) -> Vec<f32> {
     use crate::trace::State;
     let q = crate::simd::oprofile::nqf(om.m);
-    let mut exp_m = vec![0.0_f32; q * 4];
+    let mut exp_k = vec![0.0_f32; q * 4];
     let mut exp_n = 0.0_f32;
     let mut exp_c = 0.0_f32;
     let mut exp_j = 0.0_f32;
@@ -21,8 +22,7 @@ pub(super) fn null2_by_trace_striped(
         }
         ld += 1;
         if tr.k[z] > 0 {
-            let k = tr.k[z] - 1;
-            exp_m[(k % q) * 4 + k / q] += 1.0;
+            exp_k[tr.k[z] - 1] += 1.0;
         } else {
             match tr.st[z] {
                 State::N => exp_n += 1.0,
@@ -38,24 +38,36 @@ pub(super) fn null2_by_trace_striped(
     }
 
     let norm = 1.0 / ld as f32;
-    for val in &mut exp_m {
-        *val *= norm;
-    }
     let xfactor = exp_n * norm + exp_c * norm + exp_j * norm;
+    let exp_m: Vec<__m128> = (0..q)
+        .map(|stripe| {
+            let lanes = [0, 1, 2, 3].map(|lane| exp_k[lane * q + stripe] * norm);
+            unsafe { _mm_loadu_ps(lanes.as_ptr()) }
+        })
+        .collect();
 
-    om.rfv
-        .iter()
-        .take(om.abc_k)
-        .map(|odds| {
-            let mut lanes = [0.0_f32; 4];
-            for (stripe, expected) in odds.iter().take(q).zip(exp_m.as_chunks::<4>().0) {
-                for lane in 0..4 {
-                    lanes[lane] += expected[lane] * stripe[lane];
+    // Four residues per pass keep four sums in registers, each summed in stripe order as C does.
+    let (blocks, rest) = om.rfv[..om.abc_k].as_chunks::<4>();
+    assert!(rest.is_empty());
+    let mut null2 = Vec::with_capacity(om.abc_k);
+    for block in blocks {
+        let rows = block.each_ref().map(|row| &row[..q]);
+        let sums = unsafe {
+            let mut acc = [_mm_setzero_ps(); 4];
+            for (stripe, &ev) in exp_m.iter().enumerate() {
+                for (sv, row) in acc.iter_mut().zip(rows) {
+                    *sv = _mm_add_ps(*sv, _mm_mul_ps(ev, _mm_load_ps(row[stripe].as_ptr())));
                 }
             }
-            ((lanes[0] + lanes[1]) + (lanes[2] + lanes[3])) + xfactor
-        })
-        .collect()
+            acc.map(|sv| {
+                let mut lanes = [0.0_f32; 4];
+                _mm_storeu_ps(lanes.as_mut_ptr(), sv);
+                lanes
+            })
+        };
+        null2.extend(sums.map(|l| ((l[0] + l[1]) + (l[2] + l[3])) + xfactor));
+    }
+    null2
 }
 
 pub(super) fn add_null2_correction(
