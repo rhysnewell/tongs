@@ -238,3 +238,7 @@ fn quick_pick<const N: usize>(roll: f64, weights: &[f32; N]) -> Option<usize> {
     }
     Some(N - 1)
 }
+
+#[cfg(test)]
+#[path = "../../tests/unit/simd/stotrace_test.rs"]
+mod tests;
