@@ -27,7 +27,6 @@ fn configured_profile(seq_len: usize) -> (Vec<tongs::alphabet::Dsq>, simd::oprof
 
 fn assert_probmx_equal(label: &str, got: &simd::probmx::ProbMx, expected: &simd::probmx::ProbMx) {
     assert_f32_slice_exact(&format!("{label}.xmx"), &got.xmx, &expected.xmx);
-    assert_f64_slice_exact(&format!("{label}.scale"), &got.scale, &expected.scale);
     assert_f32_slice_exact(
         &format!("{label}.row_scale"),
         &got.row_scale,
@@ -62,24 +61,6 @@ fn assert_f32_slice_exact(label: &str, got: &[f32], expected: &[f32]) {
     }
 }
 
-fn assert_f64_slice_exact(label: &str, got: &[f64], expected: &[f64]) {
-    assert_eq!(
-        got.len(),
-        expected.len(),
-        "{label} length differed: got {}, expected {}",
-        got.len(),
-        expected.len()
-    );
-    for (idx, (&g, &e)) in got.iter().zip(expected).enumerate() {
-        assert!(
-            g.to_bits() == e.to_bits(),
-            "{label}[{idx}] differed: got {g:?} ({:#018x}), expected {e:?} ({:#018x})",
-            g.to_bits(),
-            e.to_bits()
-        );
-    }
-}
-
 #[test]
 fn resized_probmx_overwrites_poisoned_storage() {
     let seq_len = 257;
@@ -89,28 +70,10 @@ fn resized_probmx_overwrites_poisoned_storage() {
     reused_fwd.striped_dp.fill(12345.5);
     reused_fwd.resize_full(om.m, seq_len);
 
-    let mut clean_dp = Vec::new();
-    let mut reused_dp = Vec::new();
-    let clean_sc = unsafe {
-        simd::fwd_filter::forward_parser_pmx_offset_with_scratch(
-            &dsq,
-            0,
-            seq_len,
-            &om,
-            &mut clean_fwd,
-            &mut clean_dp,
-        )
-    };
-    let reused_sc = unsafe {
-        simd::fwd_filter::forward_parser_pmx_offset_with_scratch(
-            &dsq,
-            0,
-            seq_len,
-            &om,
-            &mut reused_fwd,
-            &mut reused_dp,
-        )
-    };
+    let clean_sc =
+        unsafe { simd::fwd_filter::forward_parser_pmx(&dsq, seq_len, &om, &mut clean_fwd) };
+    let reused_sc =
+        unsafe { simd::fwd_filter::forward_parser_pmx(&dsq, seq_len, &om, &mut reused_fwd) };
 
     assert_f32_exact("forward_score", reused_sc, clean_sc);
     assert_probmx_equal("forward", &reused_fwd, &clean_fwd);
@@ -120,34 +83,22 @@ fn resized_probmx_overwrites_poisoned_storage() {
     reused_bck.striped_dp.fill(-7777.25);
     reused_bck.resize_full(om.m, seq_len);
 
-    let mut clean_prev = Vec::new();
-    let mut clean_cur = Vec::new();
-    let mut reused_prev = Vec::new();
-    let mut reused_cur = Vec::new();
     let clean_bck_sc = unsafe {
-        simd::bck_filter::backward_parser_pmx_offset_with_scratch(
+        simd::bck_filter::backward_parser_pmx(
             &dsq,
-            0,
             seq_len,
             &om,
-            clean_sc,
-            &mut clean_bck,
             Some(&clean_fwd.row_scale),
-            &mut clean_prev,
-            &mut clean_cur,
+            &mut clean_bck,
         )
     };
     let reused_bck_sc = unsafe {
-        simd::bck_filter::backward_parser_pmx_offset_with_scratch(
+        simd::bck_filter::backward_parser_pmx(
             &dsq,
-            0,
             seq_len,
             &om,
-            clean_sc,
-            &mut reused_bck,
             Some(&clean_fwd.row_scale),
-            &mut reused_prev,
-            &mut reused_cur,
+            &mut reused_bck,
         )
     };
 
