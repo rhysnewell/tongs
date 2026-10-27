@@ -4,6 +4,7 @@ use std::io::{BufReader, BufWriter, Write};
 use std::path::{Path, PathBuf};
 
 use clap::Parser;
+use rayon::prelude::*;
 
 use tongs::alphabet::Alphabet;
 use tongs::bg::Bg;
@@ -372,14 +373,25 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
         BufWriter::new(file)
     });
 
-    let queries = hmms
-        .iter()
-        .map(|hmm| configure(hmm, &args))
-        .collect::<Vec<_>>();
+    // The reader stays on this thread while the pool configures models and scans the block
+    // already read, so reading never holds the workers up.
     let mut reader = targets::Reader::open(&args, &Alphabet::new(hmms[0].abc_type));
+    let (queries, mut block) = std::thread::scope(|s| {
+        let setup = s.spawn(|| {
+            hmms.par_iter()
+                .map(|hmm| configure(hmm, &args))
+                .collect::<Vec<_>>()
+        });
+        let block = reader.next_block(BLOCK_RESIDUES);
+        (setup.join().unwrap(), block)
+    });
     let mut scans = queries.iter().map(|_| Scan::default()).collect::<Vec<_>>();
-    while let Some((first, block)) = reader.next_block(BLOCK_RESIDUES) {
-        let found = scan_all(&queries, &block, first);
+    while let Some((first, targets)) = block.take() {
+        let found = std::thread::scope(|s| {
+            let scan = s.spawn(|| scan_all(&queries, &targets, first));
+            block = reader.next_block(BLOCK_RESIDUES);
+            scan.join().unwrap()
+        });
         for (scan, more) in scans.iter_mut().zip(found) {
             scan.absorb(more);
         }
