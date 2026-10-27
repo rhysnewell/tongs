@@ -3,6 +3,7 @@ use std::path::Path;
 
 use tongs::alphabet::Alphabet;
 use tongs::sequence::{self, Sequence, SequenceFormat};
+use tongs::subcmd::inputs::open_seq_file_as;
 
 use super::Args;
 
@@ -27,12 +28,12 @@ impl Reader {
                 eprintln!("Error opening restricted sequence file: {}", e);
                 std::process::exit(1);
             }),
-            None => open_target_seq_file(&args.seqdb, abc, args.tformat.as_deref()).unwrap_or_else(
-                |e| {
+            None => {
+                open_seq_file_as(&args.seqdb, abc, args.tformat.as_deref()).unwrap_or_else(|e| {
                     eprintln!("Error opening sequence file: {}", e);
                     std::process::exit(1);
-                },
-            ),
+                })
+            }
         };
         Reader {
             sqf,
@@ -61,18 +62,6 @@ impl Reader {
             block.push(sq);
         }
         Ok((!block.is_empty()).then_some((first, block)))
-    }
-}
-
-fn open_target_seq_file(
-    path: &Path,
-    abc: &Alphabet,
-    tformat: Option<&str>,
-) -> tongs::errors::HmmerResult<sequence::SeqFile<Box<dyn std::io::Read>>> {
-    if let Some(format) = tformat {
-        sequence::open_seq_file_with_format(path, abc, SequenceFormat::from_name(format).unwrap())
-    } else {
-        sequence::open_seq_file(path, abc)
     }
 }
 

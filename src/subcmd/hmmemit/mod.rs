@@ -1,8 +1,6 @@
-//! hmmemit — sample or emit sequences from an HMM.
-
 #![allow(clippy::if_same_then_else, clippy::needless_range_loop)]
 
-use std::io::{BufReader, Write};
+use std::io::Write;
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
 
@@ -11,12 +9,13 @@ use clap::{ArgAction, FromArgMatches, Parser};
 use tongs::alphabet::{Alphabet, Dsq, DSQ_SENTINEL};
 use tongs::bg::Bg;
 use tongs::hmm::{Hmm, DD, DM, II, IM, MD, MM};
-use tongs::hmmfile;
 use tongs::profile::{
     profile_config, Profile, P7P_BM, P7P_C, P7P_E, P7P_J, P7P_LOOP, P7P_MOVE, P7P_N, P7_GLOCAL,
     P7_LOCAL, P7_UNIGLOCAL, P7_UNILOCAL,
 };
 use tongs::sequence::Sequence;
+use tongs::subcmd::inputs::read_hmms;
+use tongs::subcmd::outputs::create_file_or_exit;
 use tongs::trace::{State, Trace};
 use tongs::util::cmath::c_exp_to_f32;
 use tongs::util::random::MersenneTwister;
@@ -122,21 +121,12 @@ fn parse_unit_interval(s: &str) -> Result<f32, String> {
     }
 }
 
-/// Entry point for `hmmemit`: emit consensus or sampled sequences from each HMM
-/// in the input file.
-///
-/// With `-c`/`-C`, writes one consensus record per HMM. Otherwise samples
-/// `-N` independent sequences from the core or configured profile model.
 pub fn run(args: Vec<String>) -> std::process::ExitCode {
     use clap::parser::ValueSource;
     use clap::CommandFactory;
 
-    // Parse once via ArgMatches so we can tell apart values that were given on
-    // the command line from those that came from a clap `default_value`. This is
-    // needed to faithfully reproduce C's `reqs` semantics on `-L`/`--minl`/`--minu`,
-    // which have non-NULL defaults but whose `reqs` (esl_opt_IsOn) fire on
-    // *presence*, not value. The toggle groups (-a/-c/-C/-p, the four mode flags)
-    // and `-N` incompatibilities are enforced by clap attributes on `Args`.
+    // C's reqs on -L, --minl and --minu fire on presence, not value, and all three have defaults.
+    // ArgMatches tells a value given on the command line from a clap default.
     let matches = match Args::command().try_get_matches_from(&args) {
         Ok(m) => m,
         Err(e) => {
@@ -163,7 +153,7 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
         std::process::exit(1);
     }
 
-    let hmms = read_hmms_maybe_stdin(&args.hmmfile).unwrap_or_else(|e| {
+    let hmms = read_hmms(&args.hmmfile).unwrap_or_else(|e| {
         eprintln!("Error reading HMM file: {}", e);
         std::process::exit(1);
     });
@@ -175,12 +165,10 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
         std::process::exit(1);
     }
 
-    let mut outfile = args.outfile.as_ref().map(|p| {
-        std::fs::File::create(p).unwrap_or_else(|e| {
-            eprintln!("Error creating output file: {}", e);
-            std::process::exit(1);
-        })
-    });
+    let mut outfile = args
+        .outfile
+        .as_ref()
+        .map(|p| create_file_or_exit(p, "output file"));
     let stdout = std::io::stdout();
     let mut stdout_lock = stdout.lock();
     let out: &mut dyn Write = match outfile {
@@ -237,15 +225,6 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
         }
     }
     std::process::ExitCode::SUCCESS
-}
-
-fn read_hmms_maybe_stdin(path: &std::path::Path) -> tongs::errors::HmmerResult<Vec<Hmm>> {
-    if path == std::path::Path::new("-") {
-        let stdin = std::io::stdin();
-        hmmfile::read_hmms_auto(BufReader::new(stdin.lock()))
-    } else {
-        hmmfile::read_hmm_file_auto(path)
-    }
 }
 
 fn profile_mode(args: &Args) -> i32 {

@@ -1,6 +1,3 @@
-//! hmmfetch — retrieve an HMM from an HMM file by name.
-//! Uses SSI-like index for fast lookup on large databases.
-
 use std::collections::HashSet;
 use std::ffi::OsString;
 use std::io::{BufRead, BufReader, Write};
@@ -36,12 +33,6 @@ struct Args {
     key: Option<String>,
 }
 
-/// Entry point for `hmmfetch`: retrieve one HMM from an HMM database by name,
-/// accession, or a file of names with `-f`.
-///
-/// `--index` writes a C/Easel-compatible SSI index (`<hmmfile>.ssi`). Normal
-/// lookup builds an SSI-style in-memory lookup table, then re-scans the file to
-/// locate the matching HMM by name or accession before writing it.
 pub fn run_os(args: Vec<OsString>) -> std::process::ExitCode {
     run_from(args)
 }
@@ -62,14 +53,8 @@ where
             eprintln!("Can't use - with --index, can't index <stdin>.");
             std::process::exit(1);
         }
-        // C's create_ssi_index (hmmfetch.c:182-187) reads every HMM through one
-        // shared ESL_ALPHABET; a differing alphabet yields eslEINCOMPAT and
-        // p7_Fail with "HMM file <f> contains different alphabets" (exit 1).
-        // C opens the new SSI file (esl_newssi_Open -> fopen "w", esl_ssi.c:670)
-        // *before* the read loop, so the failed index leaves a 0-byte <f>.ssi
-        // on disk. Reproduce both: detect the mixed alphabet up front, leave a
-        // 0-byte stub, and fail. (Detected by re-using the uniform-alphabet
-        // whole-file reader purely as a validator.)
+        // C opens the .ssi before reading (esl_ssi.c:670).
+        // So a mixed-alphabet failure (hmmfetch.c:182-187) leaves a 0-byte stub.
         if !ssi::path_with_appended_suffix(&args.hmmfile, ".ssi").exists() {
             if let Err(tongs::errors::HmmerError::Format(ref msg)) =
                 hmmfile::read_hmm_file_auto(&args.hmmfile)
@@ -116,8 +101,7 @@ where
             eprintln!("Either <hmmfile> or <keyfile> can be - but not both.");
             std::process::exit(1);
         }
-        // Open the output file up front (F5: 0-byte file left on failure),
-        // before parsing the keyfile — matching C main() ordering.
+        // C opens the output before it parses the keyfile, so a failed fetch leaves a 0-byte file.
         precreate_output(output_target(&args, None).as_ref());
         let keys = read_keys(keyfile);
         if args.hmmfile != std::path::Path::new("-") {
@@ -150,7 +134,7 @@ where
                 }
             }
         }
-        let hmms = read_hmms_maybe_stdin(&args.hmmfile).unwrap_or_else(|e| {
+        let hmms = read_hmms(&args.hmmfile).unwrap_or_else(|e| {
             eprintln!("Error reading HMM file: {}", e);
             std::process::exit(1);
         });
@@ -172,7 +156,7 @@ where
         // Open the output file up front (F5: 0-byte file left on failure).
         precreate_output(output_target(&args, Some(key)).as_ref());
         if args.hmmfile == std::path::Path::new("-") {
-            let hmms = read_hmms_maybe_stdin(&args.hmmfile).unwrap_or_else(|e| {
+            let hmms = read_hmms(&args.hmmfile).unwrap_or_else(|e| {
                 eprintln!("Error reading HMM file: {}", e);
                 std::process::exit(1);
             });
@@ -198,16 +182,8 @@ where
                     std::process::exit(1);
                 }
             }
-            // No SSI index. C's onefetch (hmmfetch.c:309-326) scans the file
-            // record-by-record with p7_hmmfile_Read and breaks on the first
-            // name/accession match, so it never reads past the matched record.
-            // Fetching the first (e.g. amino) model from a mixed amino+DNA file
-            // therefore succeeds in C, while fetching a later model (or a
-            // missing key) fails with "contains different alphabets" once the
-            // scan threads the differing record. `fetch_one_sequential`
-            // reproduces that alphabet-stateful, break-on-match behavior,
-            // instead of loading the whole file under a single-alphabet gate
-            // (which rejected the mixed file outright — the old F1 bug).
+            // C's onefetch stops at the first match (hmmfetch.c:309-326).
+            // So a mixed-alphabet file fails only once the scan reaches the differing record.
             match hmmfile::fetch_one_sequential(&args.hmmfile, key).unwrap_or_else(|e| {
                 eprintln!("Error reading HMM file: {}", e);
                 std::process::exit(1);
@@ -315,7 +291,7 @@ fn read_keys(path: &str) -> Vec<String> {
     parse_lines(path, std::io::BufReader::new(file).lines())
 }
 
-fn read_hmms_maybe_stdin(path: &std::path::Path) -> tongs::errors::HmmerResult<Vec<tongs::Hmm>> {
+fn read_hmms(path: &std::path::Path) -> tongs::errors::HmmerResult<Vec<tongs::Hmm>> {
     if path == std::path::Path::new("-") {
         let stdin = std::io::stdin();
         hmmfile::read_hmms_allow_mixed_formats(BufReader::new(stdin.lock()))
@@ -333,10 +309,8 @@ fn output_target(args: &Args, key: Option<&str>) -> Option<PathBuf> {
     }
 }
 
-/// Create (truncate) the `-o`/`-O` output file *before* attempting the fetch,
-/// matching C's main() (hmmfetch.c:126-136): C `fopen(..., "w")`s the output
-/// stream up front, so a fetch that fails later (e.g. key not found) still
-/// leaves an empty 0-byte output file behind. We mirror that side effect.
+// C opens the output before fetching (hmmfetch.c:126-136).
+// So a failed fetch still leaves an empty output file.
 fn precreate_output(target: Option<&PathBuf>) {
     if let Some(path) = target {
         std::fs::File::create(path).unwrap_or_else(|e| {

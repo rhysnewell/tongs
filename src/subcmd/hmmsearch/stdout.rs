@@ -3,7 +3,9 @@ use std::io::Write;
 use tongs::output::{fmt_bias, fmt_fixed1, fmt_fixed2, fmt_score, fmt_width5_1};
 use tongs::tophits::TopHits;
 
-use super::tables::{best_domain, evalue_from_lnp, shown_hit_name, truncate_for_textw};
+use tongs::subcmd::outputs::truncate_for_textw;
+
+use super::tables::{best_domain, evalue_from_lnp, shown_hit_name};
 
 pub fn write_standard_stdout_tables<W: Write>(
     out: &mut W,
@@ -240,10 +242,7 @@ pub fn write_standard_stdout_tables<W: Write>(
                         }
                         s
                     });
-                    // Honor --acc on both the model and sequence sides
-                    // (C p7_alidisplay.c:1176-1180): each side shows its
-                    // accession when --acc is set and the accession is non-empty,
-                    // else falls back to the name.
+                    // C applies --acc to both model and sequence (p7_alidisplay.c:1176-1180).
                     tongs::tophits::print_alidisplay_blocks_acc(
                         out,
                         model_name,

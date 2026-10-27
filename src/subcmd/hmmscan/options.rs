@@ -198,27 +198,6 @@ pub(super) struct Args {
     pub(super) domz_value: Option<f64>,
 }
 
-fn parse_textw(s: &str) -> Result<usize, String> {
-    let value = s
-        .parse::<usize>()
-        .map_err(|e| format!("invalid text width: {e}"))?;
-    if value < 120 {
-        Err("--textw must be >= 120".to_string())
-    } else {
-        Ok(value)
-    }
-}
-
-fn parse_positive_f64(s: &str) -> Result<f64, String> {
-    let value = s
-        .parse::<f64>()
-        .map_err(|e| format!("invalid positive number: {e}"))?;
-    if value > 0.0 {
-        Ok(value)
-    } else {
-        Err("value must be > 0".to_string())
-    }
-}
 pub(super) fn selected_bit_cutoff(args: &Args) -> Option<BitCutoff> {
     if args.cut_ga {
         Some(BitCutoff::GA)

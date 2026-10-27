@@ -153,13 +153,6 @@ pub(super) fn shown_hit_name(hit: &Hit, show_acc: bool) -> &str {
     }
 }
 
-pub(super) fn truncate_for_textw(s: &str, width: usize) -> String {
-    if width == 0 {
-        return s.to_string();
-    }
-    s.chars().take(width).collect()
-}
-
 pub fn write_domtblout<W: Write>(
     f: &mut W,
     qname: &str,
@@ -336,21 +329,6 @@ pub fn write_table_footer<W: Write>(
     )
     .unwrap();
     writeln!(f, "# [ok]").unwrap();
-}
-
-pub(super) fn normalize_hmmsearch_table_cmdline(cmdline: &str) -> String {
-    let mut tokens = cmdline.split_whitespace();
-    match (tokens.next(), tokens.next()) {
-        (Some(_wrapper), Some("hmmsearch" | "search")) => {
-            let rest = tokens.collect::<Vec<_>>();
-            if rest.is_empty() {
-                "hmmsearch".to_string()
-            } else {
-                format!("hmmsearch {}", rest.join(" "))
-            }
-        }
-        _ => cmdline.to_string(),
-    }
 }
 
 #[allow(clippy::too_many_arguments)]

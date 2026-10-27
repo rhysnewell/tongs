@@ -71,14 +71,6 @@ pub(super) fn query_alphabet(args: &Args, hmm: &Hmm) -> Alphabet {
     }
 }
 
-pub(super) fn read_hmms(path: &std::path::Path) -> tongs::errors::HmmerResult<Vec<tongs::Hmm>> {
-    if path == std::path::Path::new("-") {
-        hmmfile::read_hmms_auto(BufReader::new(std::io::stdin().lock()))
-    } else {
-        hmmfile::read_hmm_file_auto(path)
-    }
-}
-
 pub(super) fn read_query_hmms(args: &Args) -> Result<Vec<tongs::Hmm>, String> {
     if args.qsingle_seqs {
         return match read_query_sequence_hmms(

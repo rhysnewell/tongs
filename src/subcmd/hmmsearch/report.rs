@@ -6,7 +6,9 @@ use tongs::output::fmt_width5_1;
 use tongs::search::{Query, Scan};
 use tongs::tophits::TopHits;
 
-use super::tables::{best_domain, evalue_from_lnp, shown_hit_name, truncate_for_textw};
+use tongs::subcmd::outputs::truncate_for_textw;
+
+use super::tables::{best_domain, evalue_from_lnp, shown_hit_name};
 use super::{
     write_ali_output, write_domtblout, write_pfamtblout_with_pipeline, write_tblout, Args,
 };

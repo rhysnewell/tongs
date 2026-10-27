@@ -1,5 +1,7 @@
 use std::io::Write;
 
+use tongs::subcmd::cli::command_line_has_option;
+
 use super::Args;
 
 pub(super) fn write_header(
@@ -230,17 +232,4 @@ fn write_hmmsearch_option_header(out: &mut dyn Write, args: &Args, cmdline: &str
             writeln!(out, "# random number seed set to:       {}", args.seed).unwrap();
         }
     }
-}
-
-fn command_line_has_option(cmdline: &str, option: &str) -> bool {
-    let compact_short = option
-        .strip_prefix('-')
-        .filter(|rest| !rest.starts_with('-') && rest.chars().count() == 1)
-        .map(|_| option);
-    cmdline.split_whitespace().any(|token| {
-        token == option
-            || token.starts_with(&format!("{option}="))
-            || compact_short
-                .is_some_and(|short| token.starts_with(short) && token.len() > short.len())
-    })
 }

@@ -1,16 +1,21 @@
 #![allow(clippy::if_same_then_else, clippy::too_many_arguments)]
 
-use std::io::{BufReader, BufWriter, Write};
+use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
 
 use clap::Parser;
 use rayon::prelude::*;
 
 use tongs::alphabet::Alphabet;
-use tongs::hmmfile;
 use tongs::logsum;
 use tongs::search::{scan_all, Query, Scan};
 use tongs::sequence::SequenceFormat;
+use tongs::subcmd::cli::{
+    command_line_has_option, normalize_table_cmdline, parse_positive_f64, parse_positive_usize,
+    parse_textw,
+};
+use tongs::subcmd::inputs::read_hmms;
+use tongs::subcmd::outputs::create_output_file_or_exit;
 
 mod options;
 mod pfam;
@@ -22,7 +27,6 @@ mod targets;
 pub use pfam::write_pfamtblout;
 pub(crate) use pfam::write_pfamtblout_with_pipeline;
 pub use stdout::write_standard_stdout_tables;
-use tables::normalize_hmmsearch_table_cmdline;
 pub(crate) use tables::write_ali_output;
 pub use tables::{best_domain, write_domtblout, write_table_footer, write_tblout};
 pub(crate) use targets::open_restricted_target_seq_file;
@@ -251,45 +255,10 @@ struct Args {
     tformat: Option<String>,
 }
 
-fn parse_textw(s: &str) -> Result<usize, String> {
-    let value = s
-        .parse::<usize>()
-        .map_err(|e| format!("invalid text width: {e}"))?;
-    if value < 120 {
-        Err("--textw must be >= 120".to_string())
-    } else {
-        Ok(value)
-    }
-}
-
-fn parse_positive_f64(s: &str) -> Result<f64, String> {
-    let value = s
-        .parse::<f64>()
-        .map_err(|e| format!("invalid positive number: {e}"))?;
-    if value > 0.0 {
-        Ok(value)
-    } else {
-        Err("value must be > 0".to_string())
-    }
-}
-
-fn parse_positive_usize(s: &str) -> Result<usize, String> {
-    let value = s
-        .parse::<usize>()
-        .map_err(|e| format!("invalid positive integer: {e}"))?;
-    if value > 0 {
-        Ok(value)
-    } else {
-        Err("value must be > 0".to_string())
-    }
-}
-
 pub fn run(args: Vec<String>) -> std::process::ExitCode {
     let cmdline = args.join(" ");
-    let cpu_was_requested = args
-        .iter()
-        .any(|arg| arg == "--cpu" || arg.starts_with("--cpu="))
-        || std::env::var_os("HMMER_NCPU").is_some();
+    let cpu_was_requested =
+        command_line_has_option(&cmdline, "--cpu") || std::env::var_os("HMMER_NCPU").is_some();
     let args = tongs::util::apply_hmmer_ncpu_env_default(args);
     let args = Args::parse_from(&args);
     if let Some(format) = args.tformat.as_deref() {
@@ -426,7 +395,7 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
             reader.residues,
         );
     }
-    let table_cmdline = normalize_hmmsearch_table_cmdline(&cmdline);
+    let table_cmdline = normalize_table_cmdline(&cmdline, &["hmmsearch", "search"]);
     if let Some(f) = sinks.tblout.as_mut() {
         write_table_footer(
             f,
@@ -546,29 +515,6 @@ fn configure<'a>(hmm: &'a tongs::Hmm, args: &Args) -> Query<'a> {
     pli.do_alignment = true;
     pli.do_alignment_display = !args.noali || args.ali_outfile.is_some();
     query
-}
-
-pub(crate) fn create_output_file_or_exit(
-    path: &std::path::Path,
-    message_template: &str,
-) -> std::fs::File {
-    std::fs::File::create(path).unwrap_or_else(|_| {
-        eprintln!(
-            "{}",
-            message_template.replace("{path}", &path.display().to_string())
-        );
-        std::process::exit(1);
-    })
-}
-
-/// Read one or more profile HMMs from `path`, auto-dispatching ASCII vs binary
-/// by magic bytes like C `p7_hmmfile_Open`.
-fn read_hmms(path: &std::path::Path) -> tongs::errors::HmmerResult<Vec<tongs::Hmm>> {
-    if path == std::path::Path::new("-") {
-        hmmfile::read_hmms_auto(BufReader::new(std::io::stdin().lock()))
-    } else {
-        hmmfile::read_hmm_file_auto(path)
-    }
 }
 
 #[cfg(test)]

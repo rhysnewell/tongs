@@ -1,6 +1,4 @@
-//! hmmstat — display summary statistics for each HMM in a file.
-
-use std::io::{BufReader, Write};
+use std::io::Write;
 use std::path::PathBuf;
 
 use clap::Parser;
@@ -8,8 +6,9 @@ use clap::Parser;
 use tongs::alphabet::Alphabet;
 use tongs::bg::Bg;
 use tongs::hmm::{DM, IM, MI, MM};
-use tongs::hmmfile;
 use tongs::profile;
+use tongs::subcmd::inputs::read_hmms;
+use tongs::subcmd::outputs::mean_match_relative_entropy;
 use tongs::util::cmath::{c_log_f64, ESL_CONST_LOG2, ESL_CONST_LOG2R};
 
 #[derive(Parser)]
@@ -19,16 +18,10 @@ struct Args {
     hmmfile: PathBuf,
 }
 
-/// Entry point for `hmmstat`: print one summary row per HMM in the input file.
-///
-/// Columns: idx, name, accession, nseq, eff_nseq, M (model length), mean match
-/// relative entropy, mean information content, mean position-wise relative
-/// entropy, and composition-vs-background KL divergence. Mirrors the default
-/// (`-h` aside) tabular path of `main()` in hmmer/src/hmmstat.c.
 pub fn run(args: Vec<String>) -> std::process::ExitCode {
     let args = Args::parse_from(&args);
 
-    let hmms = read_hmms_maybe_stdin(&args.hmmfile).unwrap_or_else(|e| {
+    let hmms = read_hmms(&args.hmmfile).unwrap_or_else(|e| {
         eprintln!("Error reading HMM file: {}", e);
         std::process::exit(1);
     });
@@ -94,15 +87,6 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
     std::process::ExitCode::SUCCESS
 }
 
-fn read_hmms_maybe_stdin(path: &std::path::Path) -> tongs::errors::HmmerResult<Vec<tongs::Hmm>> {
-    if path == std::path::Path::new("-") {
-        let stdin = std::io::stdin();
-        hmmfile::read_hmms_auto(BufReader::new(stdin.lock()))
-    } else {
-        hmmfile::read_hmm_file_auto(path)
-    }
-}
-
 #[allow(clippy::too_many_arguments)]
 fn write_stat_row<W: Write>(
     out: &mut W,
@@ -132,21 +116,6 @@ fn write_stat_row<W: Write>(
         tongs::output::fmt_width6_2(comp_kl as f64)
     )
     .unwrap();
-}
-
-/// Mean relative entropy per match emission.
-fn mean_match_relative_entropy(h: &tongs::Hmm, bg: &Bg) -> f32 {
-    let k = h.abc_k;
-    let mut sum = 0.0_f32;
-    for node in 1..=h.m {
-        for x in 0..k {
-            let p = h.mat[node][x];
-            if p > 0.0 && bg.f[x] > 0.0 {
-                sum += p * c_log_f64((p / bg.f[x]) as f64) as f32 * (ESL_CONST_LOG2R as f32);
-            }
-        }
-    }
-    sum / h.m as f32
 }
 
 /// Mean information content per match emission.
@@ -359,11 +328,7 @@ mod tests {
 
     #[test]
     fn stat_row_idx_uses_c_minus_6d_field_width_for_large_indices() {
-        // C body format is "%-6d %-20s ...": the idx is left-justified in a
-        // fixed width-6 field followed by a single space. For idx >= 10000 the
-        // 5-digit value still occupies the 6-wide field, so it is "10000 "
-        // (5 digits + 1 pad + the separating space => "10000  "), not the
-        // old Rust "{:<4}   " which produced "10000   " (5 + 3 spaces).
+        // C's "%-6d " pads idx to 6 then adds a space, so 10000 gives "10000  ".
         let mut out = Vec::new();
         write_stat_row(&mut out, 10000, "fn3", "-", 1, 1.0, 1, 0.0, 0.0, 0.0, 0.0);
         let s = String::from_utf8(out).unwrap();

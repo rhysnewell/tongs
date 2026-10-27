@@ -90,7 +90,7 @@ pub(super) fn output_header(
         )
         .unwrap();
     }
-    // Mirror C nhmmer.c:341-342 — emit alphabet assertion when flag is used.
+    // C prints the alphabet assertion only when the flag is given (nhmmer.c:341-342).
     if args.dna {
         writeln!(out, "# input query is asserted as:      DNA").unwrap();
     }
@@ -289,33 +289,5 @@ fn write_nhmmer_option_header(out: &mut dyn Write, args: &Args, cmdline: &str) {
             writeln!(out, "# random number seed:              one-time arbitrary").unwrap();
         }
         writeln!(out, "# random number seed set to:       {}", args.seed).unwrap();
-    }
-}
-
-pub(super) fn command_line_has_option(cmdline: &str, option: &str) -> bool {
-    let compact_short = option
-        .strip_prefix('-')
-        .filter(|rest| !rest.starts_with('-') && rest.chars().count() == 1)
-        .map(|_| option);
-    cmdline.split_whitespace().any(|token| {
-        token == option
-            || token.starts_with(&format!("{option}="))
-            || compact_short
-                .is_some_and(|short| token.starts_with(short) && token.len() > short.len())
-    })
-}
-
-pub(super) fn normalize_nhmmer_table_cmdline(cmdline: &str) -> String {
-    let mut tokens = cmdline.split_whitespace();
-    match (tokens.next(), tokens.next()) {
-        (Some(_wrapper), Some("nhmmer")) => {
-            let rest = tokens.collect::<Vec<_>>();
-            if rest.is_empty() {
-                "nhmmer".to_string()
-            } else {
-                format!("nhmmer {}", rest.join(" "))
-            }
-        }
-        _ => cmdline.to_string(),
     }
 }

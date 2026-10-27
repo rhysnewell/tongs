@@ -214,21 +214,6 @@ pub(super) fn output_header(
     writeln!(out).unwrap();
 }
 
-pub(super) fn normalize_jackhmmer_table_cmdline(cmdline: &str) -> String {
-    let mut tokens = cmdline.split_whitespace();
-    match (tokens.next(), tokens.next()) {
-        (Some(_wrapper), Some("jackhmmer")) => {
-            let rest = tokens.collect::<Vec<_>>();
-            if rest.is_empty() {
-                "jackhmmer".to_string()
-            } else {
-                format!("jackhmmer {}", rest.join(" "))
-            }
-        }
-        _ => cmdline.to_string(),
-    }
-}
-
 fn write_jackhmmer_option_header(out: &mut dyn Write, args: &Args, cmdline: &str) {
     if command_line_has_option(cmdline, "-E") {
         writeln!(
@@ -356,17 +341,4 @@ fn write_jackhmmer_option_header(out: &mut dyn Write, args: &Args, cmdline: &str
             writeln!(out, "# random number seed set to:       {}", args.seed).unwrap();
         }
     }
-}
-
-fn command_line_has_option(cmdline: &str, option: &str) -> bool {
-    let compact_short = option
-        .strip_prefix('-')
-        .filter(|rest| !rest.starts_with('-') && rest.chars().count() == 1)
-        .map(|_| option);
-    cmdline.split_whitespace().any(|token| {
-        token == option
-            || token.starts_with(&format!("{option}="))
-            || compact_short
-                .is_some_and(|short| token.starts_with(short) && token.len() > short.len())
-    })
 }

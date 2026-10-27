@@ -1,5 +1,3 @@
-//! hmmbuild — build profile HMM(s) from multiple sequence alignment(s).
-
 use std::io::{BufReader, Read, Write};
 use std::path::PathBuf;
 
@@ -15,7 +13,12 @@ use tongs::msa;
 use tongs::output::{fmt_fixed3, fmt_width6_3, fmt_width8_2};
 use tongs::prior::PriorStrategy;
 use tongs::seqmodel;
-use tongs::util::cmath::{c_log_f64, ESL_CONST_LOG2R};
+use tongs::subcmd::cli::{
+    command_line_has_option, parse_open_unit_f64, parse_pextend, parse_popen, parse_positive_f64,
+    parse_positive_usize, parse_unit_f64, parse_window_beta,
+};
+use tongs::subcmd::inputs::guess_msa_alphabet;
+use tongs::subcmd::outputs::{create_file_or_exit, mean_match_relative_entropy};
 
 mod options;
 use options::*;
@@ -41,23 +44,11 @@ impl std::ops::Deref for BuildAlignment {
     }
 }
 
-/// Entry point for `hmmbuild`: build profile HMM(s) from MSA(s) and write them
-/// to a single output file.
-///
-/// Streams a Stockholm input, calls the builder pipeline per alignment, applies
-/// optional name/alphabet overrides, and prints HMMER 3.4's per-MSA summary line
-/// (`idx`, name, nodes, nseq, eff_nseq). Corresponds to `main()` /
-/// `output_result()` in hmmer/src/hmmbuild.c (single-threaded path only).
 pub fn run(args: Vec<String>) -> std::process::ExitCode {
     let requested = Requested::from_args(&args);
     let args = Args::parse_from(&args);
     let _stall_compat = args.stall;
 
-    // Alphabet (--amino/--dna/--rna) and construction (--fast/--hand) mutual
-    // exclusion, the --symfrac/--fragthresh 0<=x<=1 range, and "--symfrac
-    // requires --fast" (clap: conflicts_with --hand) are all enforced at parse
-    // time by clap, matching C's ALPHOPTS/CONOPTS toggles, range columns, and
-    // --symfrac reqs --fast in hmmbuild.c.
     if requested.wid && !args.wblosum {
         eprintln!("Error: --wid only works in combination with --wblosum");
         std::process::exit(1);
@@ -81,10 +72,8 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
     if args.singlemx {
         if let Some(path) = args.mxfile.as_ref() {
             std::fs::File::open(path).unwrap_or_else(|_| {
-                // p7_builder_SetScoreSystem (p7_builder.c:307). C's hmmbuild
-                // opens the alignment file before reaching this check, so it
-                // reports a missing alignment first; this port validates the
-                // score system up front. See TODO.md.
+                // C reports a missing alignment before this check (p7_builder.c:307).
+                // This port checks the score system first. See TODO.md.
                 eprintln!(
                     "\nError: Failed to set single query seq score system:\nFailed to find or open matrix file {}\n",
                     path.display()
@@ -157,10 +146,7 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
     } else {
         args.pextend
     };
-    // The label hmmbuild echoes for --singlemx. C prints the --mxfile path
-    // (hmmbuild.c, "# subst score matrix (file)") when one is given, otherwise
-    // the --mx value, with DNA1 substituted for nucleotide input
-    // (hmmbuild.c:592).
+    // Matches the label C echoes for --singlemx (hmmbuild.c:592).
     let singlemx_matrix_label: String = match args.mxfile.as_ref() {
         Some(path) => path.display().to_string(),
         None if nucleotide_singlemx && !requested.mx => "DNA1".to_string(),
@@ -187,12 +173,10 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
         seqmodel::ScoreMatrix::blosum62()
     };
 
-    let mut summary_file = args.summary_out.as_ref().map(|p| {
-        std::fs::File::create(p).unwrap_or_else(|e| {
-            eprintln!("Error creating summary output file: {}", e);
-            std::process::exit(1);
-        })
-    });
+    let mut summary_file = args
+        .summary_out
+        .as_ref()
+        .map(|p| create_file_or_exit(p, "summary output file"));
     let stdout = std::io::stdout();
     let mut stdout_lock = stdout.lock();
     let summary: &mut dyn Write = match summary_file {
@@ -201,10 +185,7 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
     };
 
     // Build output file
-    let mut out_file = std::fs::File::create(&args.hmmfile).unwrap_or_else(|e| {
-        eprintln!("Error creating HMM file: {}", e);
-        std::process::exit(1);
-    });
+    let mut out_file = create_file_or_exit(&args.hmmfile, "HMM file");
 
     output_header(summary, &args, &requested, &singlemx_matrix_label);
     if abc.abc_type == AlphabetType::Amino {
@@ -231,12 +212,10 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
         .unwrap();
     }
 
-    let mut msa_out = args.msa_out.as_ref().map(|p| {
-        std::fs::File::create(p).unwrap_or_else(|e| {
-            eprintln!("Error creating processed alignment output file: {}", e);
-            std::process::exit(1);
-        })
-    });
+    let mut msa_out = args
+        .msa_out
+        .as_ref()
+        .map(|p| create_file_or_exit(p, "processed alignment output file"));
     let calibration_config = CalibrationConfig {
         em_l: args.em_l,
         em_n: args.em_n,
@@ -378,11 +357,8 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
 
         let rel_entropy = mean_match_relative_entropy(&hmm, &bg);
         let description = hmm.desc.as_deref().unwrap_or("");
-        // hmmbuild.c:1291-1311 prints msa->name here, not hmm->name. The two
-        // differ under --singlemx, where p7_SingleBuilder names the model after
-        // the sequence (seqmodel.c:88) while the table still shows the
-        // alignment's name. -n renames the MSA before the build
-        // (hmmbuild.c:1361-1363), so it shows here too.
+        // C prints msa->name here, not hmm->name (hmmbuild.c:1291-1311).
+        // They differ under --singlemx, where the model takes the sequence name (seqmodel.c:88).
         let table_name: &str = args.name.as_deref().unwrap_or(&alignment.msa.name);
         if abc.abc_type == AlphabetType::Amino {
             writeln!(

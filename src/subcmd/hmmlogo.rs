@@ -1,6 +1,3 @@
-//! hmmlogo — generate data for HMM sequence logo visualization.
-//! Outputs C-style residue-height and indel-value tables.
-
 #![allow(clippy::needless_range_loop)]
 
 use std::io::{BufReader, Write};
@@ -46,10 +43,6 @@ enum LogoMode {
     Score,
 }
 
-/// Entry point for `hmmlogo`: dump C HMMER logo residue heights and,
-/// by default, per-position insert probability / expected insert length /
-/// match occupancy values. Mirrors the default branch of `main()` in
-/// hmmer/src/hmmlogo.c.
 pub fn run(args: Vec<String>) -> std::process::ExitCode {
     let args = Args::parse_from(&args);
 
@@ -75,7 +68,7 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
         LogoMode::RelentAll
     };
 
-    let hmms = read_hmms_maybe_stdin(&args.hmmfile).unwrap_or_else(|e| {
+    let hmms = read_hmms(&args.hmmfile).unwrap_or_else(|e| {
         eprintln!("Error: {}", e);
         std::process::exit(1);
     });
@@ -137,7 +130,7 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
     std::process::ExitCode::SUCCESS
 }
 
-fn read_hmms_maybe_stdin(path: &std::path::Path) -> tongs::errors::HmmerResult<Vec<tongs::Hmm>> {
+fn read_hmms(path: &std::path::Path) -> tongs::errors::HmmerResult<Vec<tongs::Hmm>> {
     if path == std::path::Path::new("-") {
         let stdin = std::io::stdin();
         hmmfile::read_first_hmm(BufReader::new(stdin.lock())).map(|hmm| vec![hmm])
@@ -174,11 +167,8 @@ fn residue_heights(hmm: &tongs::Hmm, bg: &Bg, node: usize, mode: LogoMode) -> (f
     let mut heights = vec![0.0_f32; k];
     for (x, height) in heights.iter_mut().enumerate().take(k) {
         let p = hmm.mat[node][x];
-        // C's hmmlogo_ScoreHeights (hmmlogo.c:108-116) computes log(p/bg)
-        // UNCONDITIONALLY — no guard on p — so a zero match emission yields
-        // log(0) = -inf, which prints as "  -inf" under %6.3f. The two relent
-        // modes (hmmlogo.c:48-50, 86-92) instead leave height at 0.0 when
-        // p == 0, so they keep the guard.
+        // C's hmmlogo_ScoreHeights has no guard on p, so p == 0 prints -inf (hmmlogo.c:108-116).
+        // The relent modes keep the guard and leave height at 0.0 (hmmlogo.c:48-50, 86-92).
         if mode == LogoMode::Score {
             *height = (c_log_f64((p / bg.f[x]) as f64) * ESL_CONST_LOG2R) as f32;
             continue;

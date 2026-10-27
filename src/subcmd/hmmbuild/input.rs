@@ -17,13 +17,8 @@ pub(super) fn read_build_alignments_maybe_stdin(
             .map(|msa| BuildAlignment {
                 msa,
                 cutoffs: msa::StockholmCutoffs::default(),
-                // Easel's A2M reader sets an implied RF line (x for consensus
-                // columns, . for inserts; esl_msafile_a2m.c:522-528), but C
-                // hmmbuild only consults RF under --hand. Without it the
-                // architecture comes from --symfrac like any other format,
-                // so a lowercase (insert) A2M column can still become a match
-                // state. The RF line is carried into the model's RF annotation
-                // either way.
+                // Easel's A2M reader implies an RF line, but C hmmbuild reads RF only under --hand.
+                // So --symfrac sets the architecture and a lowercase column can still be a match.
                 force_hand_arch: false,
                 original_stockholm: None,
             })
@@ -207,46 +202,4 @@ fn is_phylip_msa_format(format: &str) -> bool {
 
 fn is_phylips_msa_format(format: &str) -> bool {
     format.eq_ignore_ascii_case("phylips")
-}
-pub(super) fn guess_msa_alphabet(msa: &msa::Msa) -> Result<AlphabetType, String> {
-    let mut counts = [0usize; 26];
-    for row in &msa.aseq {
-        for &ch in row {
-            if ch.is_ascii_alphabetic() {
-                counts[(ch.to_ascii_uppercase() - b'A') as usize] += 1;
-            }
-        }
-    }
-    let n: usize = counts.iter().sum();
-    if n <= 10 {
-        return Err("could not determine alignment alphabet from <=10 residues".to_string());
-    }
-
-    let idx = |ch: u8| (ch - b'A') as usize;
-    let amino_only = b"EFIJLOPQZ"
-        .iter()
-        .map(|&ch| counts[idx(ch)])
-        .sum::<usize>();
-    if amino_only > 0 {
-        return Ok(AlphabetType::Amino);
-    }
-
-    let dna_core = b"ACGTN".iter().map(|&ch| counts[idx(ch)]).sum::<usize>();
-    let rna_core = b"ACGUN".iter().map(|&ch| counts[idx(ch)]).sum::<usize>();
-    let frac = |x: usize| x as f64 / n as f64;
-    let t = counts[idx(b'T')];
-    let u = counts[idx(b'U')];
-    if frac(dna_core) >= 0.98 && u == 0 {
-        return Ok(AlphabetType::Dna);
-    }
-    if frac(rna_core) >= 0.98 && t == 0 {
-        return Ok(AlphabetType::Rna);
-    }
-
-    let distinct = counts.iter().filter(|&&c| c > 0).count();
-    if frac(dna_core.max(rna_core)) < 0.98 && distinct >= 15 {
-        return Ok(AlphabetType::Amino);
-    }
-
-    Err("could not determine alignment alphabet".to_string())
 }

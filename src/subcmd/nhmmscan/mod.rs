@@ -1,6 +1,3 @@
-//! nhmmscan — search sequence(s) against an HMM database.
-//! Reverses hmmsearch: query=sequences, targets=HMMs.
-
 use std::io::Write;
 use std::path::PathBuf;
 
@@ -15,7 +12,13 @@ use tongs::output::{fmt_bias, fmt_fixed0, fmt_g, fmt_score};
 use tongs::pipeline::{BitCutoff, Pipeline};
 use tongs::pressed;
 use tongs::profile::{self, Profile, P7_LOCAL};
-use tongs::sequence::{self, Sequence, SequenceFormat};
+use tongs::sequence::Sequence;
+use tongs::subcmd::cli::{
+    command_line_has_option, normalize_table_cmdline, parse_positive_f64, parse_textw,
+    parse_window_beta, parse_window_length,
+};
+use tongs::subcmd::inputs::{open_seq_file_as, validate_sequence_format};
+use tongs::subcmd::outputs::{create_file_or_exit, display_name};
 use tongs::tophits::TopHits;
 use tongs::util::cmath::c_exp_f64;
 
@@ -26,17 +29,9 @@ use report::*;
 mod setup;
 use setup::*;
 
-/// Entry point for `nhmmscan`: scan each nucleotide query against every HMM in
-/// a DNA HMM database and report a ranked, E-value-thresholded hit table.
-///
-/// Per-query, profiles are built once-per-HMM in parallel via rayon and scored
-/// through the nhmmer long-target path on the requested strand(s). Hits are
-/// adjusted into scan E-value space, deduplicated by model/alignment position,
-/// thresholded, and printed with HMM names in the target column. Corresponds
-/// to `serial_master()`/`serial_loop()` in `hmmer/src/nhmmscan.c`.
 pub fn run(args: Vec<String>) -> std::process::ExitCode {
     let cmdline = args.join(" ");
-    let table_cmdline = normalize_nhmmscan_table_cmdline(&cmdline);
+    let table_cmdline = normalize_table_cmdline(&cmdline, &["nhmmscan"]);
     let args = tongs::util::apply_hmmer_ncpu_env_default(args);
     let args = Args::parse_from(&args);
     validate_sequence_format("nhmmscan --qformat", args.qformat.as_deref());
@@ -100,25 +95,19 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
         }
     }
 
-    let mut tblout_file = args.tblout.as_ref().map(|p| {
-        std::fs::File::create(p).unwrap_or_else(|e| {
-            eprintln!("Error creating tblout file: {}", e);
-            std::process::exit(1);
-        })
-    });
-    let mut dfamtblout_file = args.dfamtblout.as_ref().map(|p| {
-        std::fs::File::create(p).unwrap_or_else(|e| {
-            eprintln!("Error creating dfamtblout file: {}", e);
-            std::process::exit(1);
-        })
-    });
+    let mut tblout_file = args
+        .tblout
+        .as_ref()
+        .map(|p| create_file_or_exit(p, "tblout file"));
+    let mut dfamtblout_file = args
+        .dfamtblout
+        .as_ref()
+        .map(|p| create_file_or_exit(p, "dfamtblout file"));
 
-    let mut output_file = args.output.as_ref().map(|p| {
-        std::fs::File::create(p).unwrap_or_else(|e| {
-            eprintln!("Error creating output file: {}", e);
-            std::process::exit(1);
-        })
-    });
+    let mut output_file = args
+        .output
+        .as_ref()
+        .map(|p| create_file_or_exit(p, "output file"));
     let stdout = std::io::stdout();
     let mut stdout_lock = stdout.lock();
     let out: &mut dyn Write = match output_file {
@@ -241,7 +230,7 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
     }
 
     let mut sqf =
-        open_query_seq_file(&args.seqfile, &abc, args.qformat.as_deref()).unwrap_or_else(|e| {
+        open_seq_file_as(&args.seqfile, &abc, args.qformat.as_deref()).unwrap_or_else(|e| {
             eprintln!("Error: {}", e);
             std::process::exit(1);
         });

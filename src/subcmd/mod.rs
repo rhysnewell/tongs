@@ -1,4 +1,5 @@
 pub mod alimask;
+pub(crate) mod cli;
 pub mod hmmalign;
 pub mod hmmbuild;
 pub mod hmmconvert;
@@ -12,8 +13,10 @@ pub mod hmmscan;
 pub mod hmmsearch;
 pub mod hmmsim;
 pub mod hmmstat;
+pub(crate) mod inputs;
 pub mod jackhmmer;
 pub mod makehmmerdb;
 pub mod nhmmer;
 pub mod nhmmscan;
+pub(crate) mod outputs;
 pub mod phmmer;

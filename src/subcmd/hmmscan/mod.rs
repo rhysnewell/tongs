@@ -1,6 +1,3 @@
-//! hmmscan — search sequence(s) against an HMM database.
-//! Reverses hmmsearch: query=sequences, targets=HMMs.
-
 #![allow(clippy::too_many_arguments)]
 
 use std::io::Write;
@@ -16,8 +13,13 @@ use tongs::output::{fmt_g, fmt_width5_1};
 use tongs::pipeline::{BitCutoff, Pipeline};
 use tongs::pressed;
 use tongs::profile::{self, Profile, P7_LOCAL};
-use tongs::sequence::{self, Sequence, SequenceFormat};
+use tongs::sequence::Sequence;
 use tongs::simd::oprofile::OProfile;
+use tongs::subcmd::cli::{
+    command_line_has_option, normalize_table_cmdline, parse_positive_f64, parse_textw,
+};
+use tongs::subcmd::inputs::{open_seq_file_as, validate_sequence_format};
+use tongs::subcmd::outputs::{create_output_file_or_exit, display_name, truncate_for_textw};
 use tongs::tophits::TopHits;
 use tongs::util::cmath::c_exp_f64;
 
@@ -30,18 +32,9 @@ use report::*;
 mod scan;
 use scan::*;
 
-/// Entry point for `hmmscan`: scan each query sequence against every HMM in a
-/// database and report a ranked, E-value-thresholded hit table.
-///
-/// Per-query, profiles are built once-per-HMM in parallel via rayon, the
-/// pipeline (MSV -> Viterbi -> Forward + domain decoding) is run, the best
-/// hit per HMM is collected, and the top-hits list is sorted, thresholded, and
-/// printed in the canonical HMMER per-sequence tabular layout. Corresponds to
-/// `serial_master()` in hmmer/src/hmmscan.c. MPI is omitted; pressed HMM
-/// databases are required and read through the `.h3*` sidecar path.
 pub fn run(args: Vec<String>) -> std::process::ExitCode {
     let cmdline = args.join(" ");
-    let table_cmdline = normalize_hmmscan_table_cmdline(&cmdline);
+    let table_cmdline = normalize_table_cmdline(&cmdline, &["hmmscan", "scan"]);
     let args = tongs::util::apply_hmmer_ncpu_env_default(args);
     let args = Args::parse_from(&args);
 
@@ -97,30 +90,28 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
     }
 
     let mut tblout_file = args.tblout.as_ref().map(|p| {
-        crate::subcmd::hmmsearch::create_output_file_or_exit(
+        create_output_file_or_exit(
             p,
             "Failed to open tabular per-seq output file {path} for writing",
         )
     });
     let mut domtblout_file = args.domtblout.as_ref().map(|p| {
-        crate::subcmd::hmmsearch::create_output_file_or_exit(
+        create_output_file_or_exit(
             p,
             "Failed to open tabular per-dom output file {path} for writing",
         )
     });
     let mut pfamtblout_file = args.pfamtblout.as_ref().map(|p| {
-        crate::subcmd::hmmsearch::create_output_file_or_exit(
+        create_output_file_or_exit(
             p,
             "Failed to open pfam-style tabular output file {path} for writing",
         )
     });
 
-    let mut output_file = args.output.as_ref().map(|p| {
-        crate::subcmd::hmmsearch::create_output_file_or_exit(
-            p,
-            "Failed to open output file {path} for writing",
-        )
-    });
+    let mut output_file = args
+        .output
+        .as_ref()
+        .map(|p| create_output_file_or_exit(p, "Failed to open output file {path} for writing"));
     let stdout = std::io::stdout();
     let mut stdout_lock = stdout.lock();
     let out: &mut dyn Write = match output_file {
@@ -220,7 +211,7 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
         .collect();
 
     let mut sqf =
-        open_query_seq_file(&args.seqfile, &abc, args.qformat.as_deref()).unwrap_or_else(|e| {
+        open_seq_file_as(&args.seqfile, &abc, args.qformat.as_deref()).unwrap_or_else(|e| {
             eprintln!("Error: {}", e);
             std::process::exit(1);
         });
@@ -382,11 +373,8 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
         );
     }
     if let Some(ref mut f) = pfamtblout_file {
-        // C hmmscan deliberately passes p7_SEARCH_SEQS -> "SEARCH" for the
-        // pfam-style (TabularXfam) tail (hmmscan.c:519,971), unlike the
-        // tblout/domtblout tails above which use p7_SCAN_MODELS -> "SCAN".
-        // Verified byte-for-byte against the bundled C binary. Do NOT "fix"
-        // this to SCAN — that would break C parity.
+        // C writes "SEARCH" in the pfam tail and "SCAN" in the others (hmmscan.c:519,971).
+        // Do not change it to SCAN.
         crate::subcmd::hmmsearch::write_table_footer(
             f,
             "hmmscan",

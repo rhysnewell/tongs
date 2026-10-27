@@ -265,72 +265,6 @@ pub(super) struct Args {
     pub(super) eft: f64,
 }
 
-fn parse_positive_f64(s: &str) -> Result<f64, String> {
-    let value = s
-        .parse::<f64>()
-        .map_err(|e| format!("invalid positive number: {e}"))?;
-    if value > 0.0 {
-        Ok(value)
-    } else {
-        Err("value must be > 0".to_string())
-    }
-}
-
-fn parse_positive_usize(s: &str) -> Result<usize, String> {
-    let value = s
-        .parse::<usize>()
-        .map_err(|e| format!("invalid positive integer: {e}"))?;
-    if value > 0 {
-        Ok(value)
-    } else {
-        Err("value must be > 0".to_string())
-    }
-}
-
-fn parse_open_unit_f64(s: &str) -> Result<f64, String> {
-    let value = s
-        .parse::<f64>()
-        .map_err(|e| format!("invalid probability: {e}"))?;
-    if value > 0.0 && value < 1.0 {
-        Ok(value)
-    } else {
-        Err("value must be > 0 and < 1".to_string())
-    }
-}
-
-fn parse_textw(s: &str) -> Result<usize, String> {
-    let value = s
-        .parse::<usize>()
-        .map_err(|e| format!("invalid text width: {e}"))?;
-    if value >= 120 {
-        Ok(value)
-    } else {
-        Err("--textw must be >= 120".to_string())
-    }
-}
-
-fn parse_popen(s: &str) -> Result<f64, String> {
-    let value = s
-        .parse::<f64>()
-        .map_err(|e| format!("invalid gap open probability: {e}"))?;
-    if (0.0..0.5).contains(&value) {
-        Ok(value)
-    } else {
-        Err("--popen must be >= 0 and < 0.5".to_string())
-    }
-}
-
-fn parse_pextend(s: &str) -> Result<f64, String> {
-    let value = s
-        .parse::<f64>()
-        .map_err(|e| format!("invalid gap extend probability: {e}"))?;
-    if (0.0..1.0).contains(&value) {
-        Ok(value)
-    } else {
-        Err("--pextend must be >= 0 and < 1".to_string())
-    }
-}
-
 pub(super) struct Requested {
     pub(super) cpu: bool,
     pub(super) matrix: bool,
@@ -348,14 +282,8 @@ pub(super) struct Requested {
 
 impl Requested {
     pub(super) fn from_args(args: &[String]) -> Self {
-        let given = |flag: &str| {
-            args.iter().any(|arg| {
-                arg == flag
-                    || arg
-                        .strip_prefix(flag)
-                        .is_some_and(|rest| rest.starts_with('='))
-            })
-        };
+        let cmdline = args.join(" ");
+        let given = |flag: &str| command_line_has_option(&cmdline, flag);
         Requested {
             cpu: given("--cpu") || std::env::var_os("HMMER_NCPU").is_some(),
             matrix: given("--mx"),
@@ -393,15 +321,8 @@ pub(super) fn configure_thresholds(pli: &mut Pipeline, args: &Args) {
         pli.inc_dom_t = Some(t);
         pli.incdom_by_e = false;
     }
-    // Model-specific thresholding (--cut_ga/--cut_tc/--cut_nc) is unused in phmmer:
-    // the query model is built from a single sequence and never carries GA/TC/NC
-    // cutoffs. C (hmmer/src/phmmer.c) still configures the pipeline for these
-    // options (p7_pipeline.c:293-316): it sets by_E=FALSE and T=incT=domT=incdomT=0.0
-    // and use_bit_cutoffs=p7H_*, then calls p7_pli_NewModel() WITHOUT checking its
-    // return status (phmmer.c:565). The subsequent p7_pli_NewModelThresholds() fails
-    // silently with eslEINVAL ("bit thresholds unavailable"), leaving T at 0.0, so the
-    // effective behavior is "report/include by score >= 0.0". We replicate that exactly
-    // here, and (unlike hmmsearch/hmmscan) phmmer never calls new_model_thresholds().
+    // A phmmer query has no GA/TC/NC, and C ignores the failed threshold setup (phmmer.c:565).
+    // So --cut_* reports and includes by score >= 0.0, and new_model_thresholds is never called.
     let cutoff = if args.cut_ga {
         Some(tongs::pipeline::BitCutoff::GA)
     } else if args.cut_tc {

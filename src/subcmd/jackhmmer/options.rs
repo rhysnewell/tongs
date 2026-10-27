@@ -307,28 +307,6 @@ fn parse_nonzero_usize(s: &str) -> Result<usize, String> {
     }
 }
 
-fn parse_positive_f64(s: &str) -> Result<f64, String> {
-    let value = s
-        .parse::<f64>()
-        .map_err(|e| format!("invalid positive number: {e}"))?;
-    if value > 0.0 {
-        Ok(value)
-    } else {
-        Err("value must be > 0".to_string())
-    }
-}
-
-fn parse_unit_f64(s: &str) -> Result<f64, String> {
-    let value = s
-        .parse::<f64>()
-        .map_err(|e| format!("invalid probability: {e}"))?;
-    if (0.0..=1.0).contains(&value) {
-        Ok(value)
-    } else {
-        Err("value must be >= 0 and <= 1".to_string())
-    }
-}
-
 fn parse_unit_f32(s: &str) -> Result<f32, String> {
     let value = s
         .parse::<f32>()
@@ -337,50 +315,6 @@ fn parse_unit_f32(s: &str) -> Result<f32, String> {
         Ok(value)
     } else {
         Err("value must be >= 0 and <= 1".to_string())
-    }
-}
-
-fn parse_open_unit_f64(s: &str) -> Result<f64, String> {
-    let value = s
-        .parse::<f64>()
-        .map_err(|e| format!("invalid probability: {e}"))?;
-    if value > 0.0 && value < 1.0 {
-        Ok(value)
-    } else {
-        Err("value must be > 0 and < 1".to_string())
-    }
-}
-
-fn parse_textw(s: &str) -> Result<usize, String> {
-    let value = s
-        .parse::<usize>()
-        .map_err(|e| format!("invalid text width: {e}"))?;
-    if value >= 120 {
-        Ok(value)
-    } else {
-        Err("--textw must be >= 120".to_string())
-    }
-}
-
-fn parse_popen(s: &str) -> Result<f64, String> {
-    let value = s
-        .parse::<f64>()
-        .map_err(|e| format!("invalid gap open probability: {e}"))?;
-    if (0.0..0.5).contains(&value) {
-        Ok(value)
-    } else {
-        Err("--popen must be >= 0 and < 0.5".to_string())
-    }
-}
-
-fn parse_pextend(s: &str) -> Result<f64, String> {
-    let value = s
-        .parse::<f64>()
-        .map_err(|e| format!("invalid gap extend probability: {e}"))?;
-    if (0.0..1.0).contains(&value) {
-        Ok(value)
-    } else {
-        Err("--pextend must be >= 0 and < 1".to_string())
     }
 }
 
@@ -403,14 +337,8 @@ pub(super) struct Requested {
 
 impl Requested {
     pub(super) fn from_args(args: &[String]) -> Self {
-        let given = |flag: &str| {
-            args.iter().any(|arg| {
-                arg == flag
-                    || arg
-                        .strip_prefix(flag)
-                        .is_some_and(|rest| rest.starts_with('='))
-            })
-        };
+        let cmdline = args.join(" ");
+        let given = |flag: &str| command_line_has_option(&cmdline, flag);
         Requested {
             cpu: given("--cpu") || std::env::var_os("HMMER_NCPU").is_some(),
             matrix: given("--mx"),

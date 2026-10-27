@@ -1,6 +1,3 @@
-//! phmmer — search a protein sequence against a protein database.
-//! Builds a single-sequence HMM and searches with the hmmsearch pipeline.
-
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
@@ -13,8 +10,14 @@ use tongs::calibrate::CalibrationConfig;
 use tongs::logsum;
 use tongs::pipeline::Pipeline;
 use tongs::profile::{self, Profile, P7_LOCAL};
-use tongs::sequence::{self, Sequence, SequenceFormat};
+use tongs::sequence::{self, Sequence};
 use tongs::simd::oprofile::OProfile;
+use tongs::subcmd::cli::{
+    command_line_has_option, normalize_table_cmdline, parse_open_unit_f64, parse_pextend,
+    parse_popen, parse_positive_f64, parse_positive_usize, parse_textw,
+};
+use tongs::subcmd::inputs::{open_seq_file_as, validate_sequence_format};
+use tongs::subcmd::outputs::{create_output_file_or_exit, write_pipeline_stats, PipelineStats};
 use tongs::tophits::{Hit, TopHits};
 
 mod options;
@@ -23,23 +26,12 @@ mod header;
 use header::*;
 mod input;
 use input::*;
-mod report;
-use report::*;
 
 /// Number of target sequences read into memory per batch in the multi-threaded
 /// search loop. Mirrors `hmmsearch::TARGET_BATCH_SIZE` so phmmer's peak resident
 /// set is bounded by the batch rather than the entire target database.
 const TARGET_BATCH_SIZE: usize = 4096;
 
-/// Entry point for `phmmer`: search each query protein against a protein
-/// database via a single-sequence HMM (no iteration, no MSA).
-///
-/// For each query: builds a length-1 HMM with `seqmodel::build_single_seq_hmm`
-/// using the supplied gap-open/extend probabilities, configures local profile,
-/// runs the standard pipeline against the full target DB in parallel (rayon),
-/// then sorts/thresholds and prints the canonical per-sequence tabular block.
-/// Optional `--tblout` is delegated to `hmmsearch::write_tblout`. Corresponds
-/// to `serial_master()` in hmmer/src/phmmer.c.
 pub fn run(args: Vec<String>) -> std::process::ExitCode {
     let cmdline = args.join(" ");
     let requested = Requested::from_args(&args);
@@ -85,35 +77,30 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
     }
 
     let mut tblout_file = args.tblout.as_ref().map(|p| {
-        crate::subcmd::hmmsearch::create_output_file_or_exit(
+        create_output_file_or_exit(
             p,
             "Failed to open tabular per-seq output file {path} for writing",
         )
     });
     let mut domtblout_file = args.domtblout.as_ref().map(|p| {
-        crate::subcmd::hmmsearch::create_output_file_or_exit(
+        create_output_file_or_exit(
             p,
             "Failed to open tabular per-dom output file {path} for writing",
         )
     });
     let mut pfamtblout_file = args.pfamtblout.as_ref().map(|p| {
-        crate::subcmd::hmmsearch::create_output_file_or_exit(
+        create_output_file_or_exit(
             p,
             "Failed to open pfam-style tabular output file {path} for writing",
         )
     });
     let mut ali_file = args.ali_outfile.as_ref().map(|p| {
-        crate::subcmd::hmmsearch::create_output_file_or_exit(
-            p,
-            "Failed to open alignment output file {path} for writing",
-        )
+        create_output_file_or_exit(p, "Failed to open alignment output file {path} for writing")
     });
-    let mut output_file = args.output.as_ref().map(|p| {
-        crate::subcmd::hmmsearch::create_output_file_or_exit(
-            p,
-            "Failed to open output file {path} for writing",
-        )
-    });
+    let mut output_file = args
+        .output
+        .as_ref()
+        .map(|p| create_output_file_or_exit(p, "Failed to open output file {path} for writing"));
     let stdout = std::io::stdout();
     let mut stdout_lock = stdout.lock();
     let mut out: &mut dyn Write = match output_file {
@@ -141,7 +128,7 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
     builder.calibration = calibration_config;
 
     // Read query sequences
-    let mut query_sqf = open_sequence_file(&args.seqfile, &abc, args.qformat.as_deref())
+    let mut query_sqf = open_seq_file_as(&args.seqfile, &abc, args.qformat.as_deref())
         .unwrap_or_else(|e| {
             eprintln!("Error opening query file: {}", e);
             std::process::exit(1);
@@ -182,13 +169,6 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
             std::process::exit(1);
         });
 
-        // Stream target sequences through the pipeline in batches (mirrors
-        // hmmsearch). With `--cpu <= 1` we use a single in-place `Sequence`
-        // reader; with `--cpu > 1` we read up to `TARGET_BATCH_SIZE` records,
-        // process them in parallel via `par_iter().map_init(...)` (so each
-        // rayon worker reuses its `(bg, gm, om, pli)` state), drain the
-        // results into the merged TopHits/stats, and refill — bounding peak
-        // memory to one batch rather than the whole DB.
         let mut th = TopHits::new();
         let mut stats = PipelineStats::default();
         let mut total_residues: u64 = 0;
@@ -201,7 +181,7 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
         let effective_f3 = if args.max { 1.0 } else { args.f3 };
         let effective_biasfilter = !(args.max || args.nobias);
         {
-            let mut sqf = open_sequence_file(&args.seqdb, &abc, args.tformat.as_deref())
+            let mut sqf = open_seq_file_as(&args.seqdb, &abc, args.tformat.as_deref())
                 .unwrap_or_else(|e| {
                     eprintln!("Error opening target database: {}", e);
                     std::process::exit(1);
@@ -225,10 +205,6 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
             let mut restrict_done = false;
 
             if args.cpu <= 1 {
-                // Single-threaded: one alive `Sequence`, reused per target.
-                // The pipeline + per-thread profiles are also constructed once
-                // and reused across every target via `Pipeline::run`'s in-place
-                // grow-to-fit scratches.
                 let mut lb = local_bg.clone();
                 let mut lgm = gm.clone();
                 let mut lom = om.clone();
@@ -295,11 +271,6 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
                     sq.reuse();
                 }
             } else {
-                // Multi-threaded: batched streaming + `par_iter().map_init(...)`.
-                // Per-thread `(bg, gm, om, pli)` state is constructed once per
-                // worker (in the init closure) and reused across every target
-                // that worker processes — within a batch and across batches
-                // for the same query.
                 use rayon::prelude::*;
                 use std::sync::Arc;
                 let shared_gm = Arc::new(gm.clone());
@@ -567,7 +538,7 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
         std::process::exit(1);
     }
 
-    let table_cmdline = normalize_phmmer_table_cmdline(&cmdline);
+    let table_cmdline = normalize_table_cmdline(&cmdline, &["phmmer"]);
     if let Some(ref mut f) = tblout_file {
         crate::subcmd::hmmsearch::write_table_footer(
             f,

@@ -170,15 +170,3 @@ pub(super) fn write_processed_msa(
     };
     msa::write_stockholm_full(out, &full, 200, None).unwrap();
 }
-pub(super) fn mean_match_relative_entropy(hmm: &tongs::Hmm, bg: &Bg) -> f32 {
-    let mut sum = 0.0_f32;
-    for node in 1..=hmm.m {
-        for x in 0..hmm.abc_k {
-            let p = hmm.mat[node][x];
-            if p > 0.0 && bg.f[x] > 0.0 {
-                sum += p * c_log_f64((p / bg.f[x]) as f64) as f32 * (ESL_CONST_LOG2R as f32);
-            }
-        }
-    }
-    sum / hmm.m as f32
-}

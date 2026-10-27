@@ -1,6 +1,3 @@
-//! hmmpgmd — HMMER search daemon.
-//! Listens for search requests over TCP.
-
 use std::fs::File;
 use std::io::{BufRead, BufReader, Cursor, Read, Write};
 use std::net::{SocketAddrV4, TcpListener, TcpStream};
@@ -23,6 +20,7 @@ use tongs::profile::{self, Profile, P7_LOCAL};
 use tongs::seqmodel;
 use tongs::sequence::{self, Sequence};
 use tongs::simd::oprofile::OProfile;
+use tongs::subcmd::cli::parse_positive_usize;
 use tongs::tophits::{AliDisplay, Domain, Hit, TopHits};
 
 mod db;
@@ -113,10 +111,8 @@ impl Args {
     }
 }
 
-/// Parse a port value enforcing C's `49151<n<65536` range
-/// (`hmmpgmd.c` `--cport`/`--wport`). C parses as a signed int, so values
-/// outside the u16 range are rejected with the same range message rather than
-/// a type error.
+// C checks 49151<n<65536 on a signed int (hmmpgmd.c --cport/--wport).
+// So a value outside u16 gets the range message, not a type error.
 fn parse_port(s: &str) -> Result<u16, String> {
     let value = s
         .parse::<i64>()
@@ -125,17 +121,6 @@ fn parse_port(s: &str) -> Result<u16, String> {
         Ok(value as u16)
     } else {
         Err(format!("takes integer arg in range 49151<n<65536; got {s}"))
-    }
-}
-
-fn parse_positive_usize(s: &str) -> Result<usize, String> {
-    let value = s
-        .parse::<usize>()
-        .map_err(|e| format!("invalid positive integer: {e}"))?;
-    if value > 0 {
-        Ok(value)
-    } else {
-        Err("value must be > 0".to_string())
     }
 }
 
@@ -328,26 +313,7 @@ struct SeqDbState {
     bg: Bg,
 }
 
-/// Entry point for `hmmpgmd`: HMMER search daemon.
-///
-/// Supports the C daemon's public master/worker flags and wire framing for a
-/// compatible subset. The master accepts C-style client command blocks:
-/// `@--seqdb 1` or `@--hmmdb 1`, followed by a FASTA query and `//`; `--seqdb`
-/// requests may also send one ASCII HMM query record. It replies with
-/// `HMMD_SEARCH_STATUS`, serialized `HMMD_SEARCH_STATS`, and C-shaped `P7_HIT`
-/// records for sequence-level hits with `P7_DOMAIN`/`P7_ALIDISPLAY` payload
-/// shells. Workers can optionally load the same served database and execute
-/// framed `HMMD_CMD_SEARCH`/`HMMD_CMD_SCAN` requests, returning the same
-/// C-shaped search payload as the master. The master keeps initialized workers
-/// in a pool, schedules C-framed sequence-database client searches to them as
-/// non-overlapping `--seqdb_ranges` shards, and merges their serialized hit
-/// payloads. HMM-database scans are scheduled with C's binary
-/// `HMMD_SEARCH_CMD` `(inx,cnt)` body prefix. Sequence queries inside that
-/// binary command use C's `name\0desc\0dsq[L+2]` object layout; HMM queries use
-/// a C-shaped `P7_HMM` shell followed by transition/emission arrays and
-/// optional strings/annotation blocks.
-/// The legacy one-line sequence protocol is retained for existing tests and
-/// simple manual use.
+// The legacy one-line sequence protocol stays for existing tests and manual use.
 pub fn run(args: Vec<String>) -> ExitCode {
     let args = Args::parse_from(&args);
 

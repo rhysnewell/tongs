@@ -90,9 +90,7 @@ pub(super) struct Args {
     pub(super) e_value: f64,
 
     /// Report sequences >= this score threshold
-    // `allow_hyphen_values` so negative bit-score thresholds parse in the
-    // space-separated form C/Easel uses (e.g. `-T -20`); clap otherwise treats
-    // `-20` as flags. The `-T=-20` form also still works.
+    // allow_hyphen_values lets a negative threshold parse in C's space-separated form (`-T -20`).
     #[arg(short = 'T', conflicts_with = "e_value", allow_hyphen_values = true)]
     pub(super) score_threshold: Option<f64>,
 
@@ -341,61 +339,6 @@ impl NhmmerFmSeedConfig {
     }
 }
 
-fn parse_textw(s: &str) -> Result<usize, String> {
-    let value = s
-        .parse::<usize>()
-        .map_err(|e| format!("invalid text width: {e}"))?;
-    if value < 120 {
-        Err("--textw must be >= 120".to_string())
-    } else {
-        Ok(value)
-    }
-}
-
-fn parse_positive_f64(s: &str) -> Result<f64, String> {
-    let value = s
-        .parse::<f64>()
-        .map_err(|e| format!("invalid positive number: {e}"))?;
-    if value > 0.0 {
-        Ok(value)
-    } else {
-        Err("value must be > 0".to_string())
-    }
-}
-
-fn parse_positive_usize(s: &str) -> Result<usize, String> {
-    let value = s
-        .parse::<usize>()
-        .map_err(|e| format!("invalid positive integer: {e}"))?;
-    if value > 0 {
-        Ok(value)
-    } else {
-        Err("value must be > 0".to_string())
-    }
-}
-
-fn parse_window_length(s: &str) -> Result<i32, String> {
-    let value = s
-        .parse::<i32>()
-        .map_err(|e| format!("invalid window length: {e}"))?;
-    if value > 0 {
-        Ok(value)
-    } else {
-        Err("--w_length must be > 0 and fit in a 32-bit signed integer".to_string())
-    }
-}
-
-fn parse_window_beta(s: &str) -> Result<f64, String> {
-    let value = s
-        .parse::<f64>()
-        .map_err(|e| format!("invalid window-length beta value: {e}"))?;
-    if (0.0..=1.0).contains(&value) {
-        Ok(value)
-    } else {
-        Err("Invalid window-length beta value".to_string())
-    }
-}
-
 fn parse_block_length(s: &str) -> Result<usize, String> {
     let value = s
         .parse::<usize>()
@@ -444,14 +387,8 @@ pub(super) struct Requested {
 
 impl Requested {
     pub(super) fn from_args(args: &[String]) -> Self {
-        let given = |flag: &str| {
-            args.iter().any(|arg| {
-                arg == flag
-                    || arg
-                        .strip_prefix(flag)
-                        .is_some_and(|rest| rest.starts_with('='))
-            })
-        };
+        let cmdline = args.join(" ");
+        let given = |flag: &str| command_line_has_option(&cmdline, flag);
         Requested {
             matrix: given("--mx"),
             mxfile: given("--mxfile"),

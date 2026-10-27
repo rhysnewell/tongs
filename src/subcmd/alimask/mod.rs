@@ -1,14 +1,14 @@
-//! alimask — add/modify mask annotation on a Stockholm alignment.
-
 use std::io::{BufReader, Write};
 use std::path::PathBuf;
 
 use clap::{ArgAction, Parser};
 
-use tongs::alphabet::{Alphabet, AlphabetType};
+use tongs::alphabet::Alphabet;
 use tongs::builder::{self, RelativeWeighting};
 use tongs::msa;
 use tongs::output::fmt_fixed3;
+use tongs::subcmd::cli::command_line_has_option;
+use tongs::subcmd::inputs::guess_msa_alphabet;
 
 mod report;
 use report::*;
@@ -133,18 +133,10 @@ fn parse_fraction(s: &str) -> Result<f64, String> {
     }
 }
 
-/// Entry point for the `alimask` subcommand: append a modelmask line to a Stockholm MSA.
-///
-/// Parses the command line, reads the input alignment, and writes a Stockholm output
-/// optionally augmented with a `#=GC MM` model mask line. Corresponds to `main()` in
-/// hmmer/src/alimask.c, with the Rust port focused on the simple mask-annotation flow.
 pub fn run(args: Vec<String>) -> std::process::ExitCode {
-    let wid_on_cmdline = args
-        .iter()
-        .any(|arg| arg == "--wid" || arg.starts_with("--wid="));
-    let seed_on_cmdline = args
-        .iter()
-        .any(|arg| arg == "--seed" || arg.starts_with("--seed="));
+    let cmdline = args.join(" ");
+    let wid_on_cmdline = command_line_has_option(&cmdline, "--wid");
+    let seed_on_cmdline = command_line_has_option(&cmdline, "--seed");
     let args = Args::parse_from(&args);
     // C uses esl_opt_IsUsed("--seed"/"--wid"), which is FALSE when the supplied
     // value equals the option default (42 / 0.62 respectively). So `--seed 42`
@@ -350,12 +342,8 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
         };
 
         let mut range_mask = ali_ranges.as_ref().map(|ranges| {
-            // C (alimask.c:368-374): keep_mm = IsUsed("--appendmask"). If the
-            // input MSA has no #=GC MM line, msa->mm is freshly allocated and
-            // keep_mm forced FALSE. When !keep_mm the mask is reset to all '.'.
-            // So with --appendmask AND an existing MM line, start from the
-            // existing mask and OR the new range columns on top; otherwise
-            // start from a fresh all-'.' mask.
+            // C keeps an existing MM line only under --appendmask (alimask.c:368-374).
+            // Otherwise the mask starts as all '.'.
             let mut mask = match (args.appendmask, alignment.mm.as_ref()) {
                 (true, Some(existing)) if existing.len() == alignment.alen => existing.clone(),
                 _ => vec![b'.'; alignment.alen],
@@ -391,15 +379,8 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
             range_mask = args.modelmask.as_ref().map(|mask| mask.as_bytes().to_vec());
         }
 
-        // C re-serializes the whole MSA via esl_msafile_Write(...
-        // eslMSAFILE_STOCKHOLM) -> stockholm_write(fp, msa, cpl=200). C opens
-        // the input through esl_msafile_Open(&abc, ...) with an explicit or
-        // autodetected alphabet (digital mode), so stockholm_write textizes the
-        // sequences: gap chars normalize to '-' and residues become canonical.
-        // For model-coordinate modes, C first calls esl_msa_MarkFragments_old(),
-        // which rewrites leading/trailing non-residues in short fragments to
-        // missing data '~'. We apply the same mutation to the full-fidelity
-        // text model before writing.
+        // C writes the MSA back in digital mode, so gaps become '-' and residues canonical.
+        // C's esl_msa_MarkFragments_old turns fragment ends into '~' in model-coordinate modes.
         let write_abc = inferred_abc.clone().unwrap_or_else(|| {
             if args.dna {
                 Alphabet::dna()

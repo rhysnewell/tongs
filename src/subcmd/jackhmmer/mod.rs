@@ -1,6 +1,3 @@
-//! jackhmmer — iteratively search a protein sequence against a protein database.
-//! Builds single-seq HMM, searches, collects hits into MSA, rebuilds, repeats.
-
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
@@ -16,8 +13,14 @@ use tongs::msa::Msa;
 use tongs::pipeline::Pipeline;
 use tongs::prior::PriorStrategy;
 use tongs::profile::{self, Profile, P7_LOCAL};
-use tongs::sequence::{self, Sequence, SequenceFormat};
+use tongs::sequence::Sequence;
 use tongs::simd::oprofile::OProfile;
+use tongs::subcmd::cli::{
+    command_line_has_option, normalize_table_cmdline, parse_open_unit_f64, parse_pextend,
+    parse_popen, parse_positive_f64, parse_textw, parse_unit_f64,
+};
+use tongs::subcmd::inputs::{open_seq_file_as, validate_sequence_format};
+use tongs::subcmd::outputs::{create_output_file_or_exit, write_pipeline_stats, PipelineStats};
 use tongs::tophits::{Hit, TopHits};
 use tongs::trace::{State, Trace};
 
@@ -25,10 +28,6 @@ mod options;
 use options::*;
 mod header;
 use header::*;
-mod input;
-use input::*;
-mod report;
-use report::*;
 mod checkpoint;
 use checkpoint::*;
 mod stockholm;
@@ -36,17 +35,6 @@ pub(crate) use stockholm::*;
 
 const TARGET_BATCH_SIZE: usize = 256;
 
-/// Entry point for `jackhmmer`: iteratively search a protein query against a
-/// protein database, rebuilding the HMM each round from included hits until
-/// convergence or `-N` iterations.
-///
-/// Round 1 builds a single-sequence HMM (phmmer-style); subsequent rounds
-/// reuse the previous round's included-hit MSA augmented with the original
-/// query to rebuild the model. Each round runs the standard pipeline against
-/// the target DB in bounded parallel batches, applies E/incE thresholds,
-/// reports the canonical per-sequence tabular block, and optionally writes
-/// `--chkhmm`/`--chkali`/`--tblout`/`--domtblout` checkpoints. Corresponds to
-/// `serial_master()` in hmmer/src/jackhmmer.c.
 pub fn run(args: Vec<String>) -> std::process::ExitCode {
     let cmdline = args.join(" ");
     let requested = Requested::from_args(&args);
@@ -158,12 +146,10 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
         std::process::exit(1);
     }
 
-    let mut output_file = args.output.as_ref().map(|p| {
-        crate::subcmd::hmmsearch::create_output_file_or_exit(
-            p,
-            "Failed to open output file {path} for writing",
-        )
-    });
+    let mut output_file = args
+        .output
+        .as_ref()
+        .map(|p| create_output_file_or_exit(p, "Failed to open output file {path} for writing"));
     let stdout = std::io::stdout();
     let mut stdout_lock = stdout.lock();
     let mut out: &mut dyn Write = match output_file {
@@ -171,28 +157,25 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
         None => &mut stdout_lock,
     };
     let mut tblout_file = args.tblout.as_ref().map(|p| {
-        crate::subcmd::hmmsearch::create_output_file_or_exit(
+        create_output_file_or_exit(
             p,
             "Failed to open tabular per-seq output file {path} for writing",
         )
     });
     let mut domtblout_file = args.domtblout.as_ref().map(|p| {
-        crate::subcmd::hmmsearch::create_output_file_or_exit(
+        create_output_file_or_exit(
             p,
             "Failed to open tabular per-dom output file {path} for writing",
         )
     });
     let mut ali_file = args.ali_outfile.as_ref().map(|p| {
-        crate::subcmd::hmmsearch::create_output_file_or_exit(
-            p,
-            "Failed to open alignment output file {path} for writing",
-        )
+        create_output_file_or_exit(p, "Failed to open alignment output file {path} for writing")
     });
 
     let textw = if args.notextw { 0 } else { args.textw };
     output_header(out, &args, &requested, &cmdline);
 
-    let table_cmdline = normalize_jackhmmer_table_cmdline(&cmdline);
+    let table_cmdline = normalize_table_cmdline(&cmdline, &["jackhmmer"]);
     let calibration_config = CalibrationConfig {
         em_l: args.em_l,
         em_n: args.em_n,
@@ -207,7 +190,7 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
 
     // Read query sequences. C jackhmmer runs the full iterative search once
     // for each FASTA record and keeps the outer report/footer shared.
-    let mut query_sqf = open_sequence_file(&args.seqfile, &abc, args.qformat.as_deref())
+    let mut query_sqf = open_seq_file_as(&args.seqfile, &abc, args.qformat.as_deref())
         .unwrap_or_else(|e| {
             eprintln!("Error: {}", e);
             std::process::exit(1);
@@ -248,11 +231,8 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
         let mut final_z: Option<f64> = None;
         let mut final_domz: Option<f64> = None;
         let mut final_model_len: Option<usize> = None;
-        // MSA of included hits from the previous round. Built once at the
-        // bottom of each iteration (matching C jackhmmer.c:683) and reused at
-        // the top of the next iteration to rebuild the HMM, by `--chkali` at
-        // the bottom of the current iteration, and (after the loop) by `-A`.
-        // C builds the same `msa` once per round (jackhmmer.c:683-691, 723).
+        // C builds one MSA per round (jackhmmer.c:683-691).
+        // It feeds the next round's build, --chkali and -A (jackhmmer.c:723).
         let mut final_msa: Option<Msa> = None;
 
         for iteration in 1..=args.max_iterations {
@@ -267,19 +247,11 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
                         std::process::exit(1);
                     })
             } else {
-                // C jackhmmer.c:683 builds the round's MSA once at end of
-                // iteration; the same `msa` object is then handed to
-                // `p7_Builder` at the top of the next round (line 605) and
-                // freed at line 620. Mirror that: the MSA built at end of
-                // the prior iteration is stashed in `final_msa`; take it
-                // here so the rebuild consumes it and the storage is freed
-                // before the new round's pipeline allocates `all_hits`.
+                // C frees the round MSA once the builder consumes it (jackhmmer.c:605, 620).
+                // Taking it here frees it before this round's pipeline allocates.
                 let msa = final_msa.take();
-                // Match C jackhmmer.c:595's "destroy info->th at top of round":
-                // the prior round's tophits (with all alidisplay payloads) is
-                // no longer needed once its MSA has been materialized. Drop it
-                // before the new round's all_hits accumulator and pipeline
-                // scratch start growing.
+                // C destroys the prior round's tophits at the top of the round (jackhmmer.c:595).
+                // Dropping them here keeps the old alidisplays out of this round's peak memory.
                 final_hits = None;
 
                 let Some(msa) = msa else {
@@ -300,10 +272,8 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
                     rebuild_weighting,
                     rebuild_effn,
                     rebuild_prior,
-                    // jackhmmer.c uses one P7_BUILDER (created once with the
-                    // user's --EmL/--EmN/--EvL/--EvN/--EfL/--EfN/--Eft) for
-                    // every round, so round 2+ rebuilds must calibrate with
-                    // the same config as round 1, not Easel defaults.
+                    // C reuses one P7_BUILDER for every round.
+                    // So later rounds calibrate with the user's --E* options too.
                     calibration_config,
                     args.seed,
                 )
@@ -314,9 +284,7 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
                     eprintln!("\nError: build failed: {e}");
                     std::process::exit(1);
                 });
-                // Stash counts needed for the header banner, then drop the
-                // MSA — C does the equivalent at jackhmmer.c:620 right after
-                // the builder consumes it.
+                // C drops the MSA once the builder consumes it (jackhmmer.c:620).
                 let msa_nseq_for_banner = msa.nseq;
                 drop(msa);
                 if !query_sq.desc.is_empty() {
@@ -358,7 +326,7 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
             let mut total_residues = 0u64;
             let mut stats = PipelineStats::default();
             {
-                let mut sqf = open_sequence_file(&args.seqdb, &abc, args.tformat.as_deref())
+                let mut sqf = open_seq_file_as(&args.seqdb, &abc, args.tformat.as_deref())
                     .unwrap_or_else(|e| {
                         eprintln!("Error: {}", e);
                         std::process::exit(1);
@@ -404,11 +372,8 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
                                 (lb, lgm, lom, lpli)
                             },
                             |(lb, lgm, lom, lpli), (target_idx, sq)| {
-                                // Mirror C's `p7_pipeline_Reuse`: zero the per-target
-                                // counters before each target so the returned counts
-                                // reflect only this sequence (the outer loop sums them
-                                // into `stats`). DP scratch / profile / oprofile / bg
-                                // are reused across all of this worker's targets.
+                                // Counters reset per target, as in C's p7_pipeline_Reuse.
+                                // The outer loop sums them into stats.
                                 lpli.n_targets = target_idx.saturating_sub(1);
                                 lpli.n_past_msv = 0;
                                 lpli.n_past_bias = 0;
@@ -521,13 +486,6 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
             final_model_len = Some(hmm.m);
             prev_hmm = Some(hmm.clone());
 
-            // Build the round MSA ONCE (matching C jackhmmer.c:683's single
-            // `p7_tophits_Alignment` call per round). The same object is then
-            // reused by `--chkali` below, by the next iteration's HMM build
-            // (taken via `final_msa.take()` at the top of the loop), and by
-            // `-A` after the loop ends. The previous round's MSA was either
-            // consumed by this round's rebuild or dropped at the top of this
-            // iteration, so the stash holds at most one MSA at a time.
             let msa = tongs::tophits::included_alignment(
                 final_hits.as_ref().unwrap(),
                 &abc,
@@ -563,11 +521,8 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
             )
             .unwrap();
 
-            // Convergence test, faithful to jackhmmer.c serial_master() line 702:
-            //   `if (nnew_targets == 0 && msa->nseq <= prv_msa_nseq)`.
-            // C compares the new MSA's subsequence count against the previous
-            // round's; it has no `iteration > 1` guard (round 1 with no
-            // included hits converges immediately, msa->nseq==1<=prv==1).
+            // C's convergence test has no round guard (jackhmmer.c:702).
+            // So round 1 with no included hits converges at once, with nseq 1 <= 1.
             if n_new == 0 && msa_nseq <= prev_msa_nseq {
                 writeln!(out, "@@").unwrap();
                 writeln!(out, "@@ CONVERGED (in {} rounds). ", iteration).unwrap();
@@ -618,10 +573,6 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
             }
         }
         if let Some(ref mut f) = ali_file {
-            // Reuse the MSA already built at the end of the final iteration
-            // (matching C jackhmmer.c:723's reuse of the single per-round
-            // `msa`). When no rounds ran or no hits were found, `final_msa`
-            // is None and no `-A` block is emitted.
             if let Some(ref msa) = final_msa {
                 // jackhmmer.c:723-724: Stockholm if textw > 0, else Pfam.
                 write_stockholm_msa_for_textw(f, msa, textw);

@@ -1,10 +1,3 @@
-//! hmmsim — simulation/benchmarking tool.
-//!
-//! Generates random sequences and scores them against an HMM for calibration
-//! analysis. Score/statistical artifacts and Forward tail-mass controls are
-//! implemented, including C-shaped main-summary rows for Forward,
-//! Viterbi/MSV, and hybrid modes.
-
 #![allow(
     clippy::approx_constant,
     clippy::manual_clamp,
@@ -34,6 +27,7 @@ use tongs::profile::{
 };
 use tongs::simd::oprofile::OProfile;
 use tongs::stats::{exponential, gumbel};
+use tongs::subcmd::cli::{command_line_has_option, parse_open_unit_f64, parse_positive_usize};
 use tongs::trace::{g_trace, State};
 use tongs::util::cmath::{c_log_f64, c_logf_to_f32, c_sqrt_f64, ESL_CONST_LOG2};
 use tongs::util::random::Mt19937;
@@ -56,13 +50,8 @@ struct Args {
     #[arg(short = 'L', default_value = "100")]
     l: usize,
 
-    // C (hmmsim.c:79): --seed is eslARG_INT with NO range (unlike the n>=0-ranged
-    // seed in the search tools), so a negative seed string is accepted. C reads it
-    // with esl_opt_GetInteger (an int) and passes it to esl_randomness_Create,
-    // whose uint32_t parameter reinterprets a negative int as its wrapping u32
-    // value; only an exact 0 triggers choose_arbitrary_seed(). We mirror this:
-    // parse as i32 and cast `as u32` (wrapping) when seeding the RNG.
-    // allow_hyphen_values lets the space-separated form (--seed -5) parse like C.
+    // C reads --seed as an unranged int into a uint32_t, so a negative seed wraps (hmmsim.c:79).
+    // allow_hyphen_values lets `--seed -5` parse as it does in C.
     #[arg(long = "seed", default_value = "0", allow_hyphen_values = true)]
     seed: i32,
 
@@ -99,10 +88,8 @@ struct Args {
     #[arg(long = "pthresh", default_value = "0.02")]
     pthresh: f64,
 
-    // C: --tmin/--tmax are eslARG_REAL with NO range; --tpoints is eslARG_INT
-    // with NO range. C accepts --tmin 0, --tmax 0, negative values, --tpoints 0.
-    // allow_hyphen_values lets the space-separated negative form (e.g. --tmin -1)
-    // parse the same way C does, rather than being treated as an unknown flag.
+    // C gives --tmin, --tmax and --tpoints no range, so zero and negative values are accepted.
+    // allow_hyphen_values lets `--tmin -1` parse as it does in C.
     #[arg(long = "tmin", default_value = "0.02", allow_hyphen_values = true)]
     tmin: f64,
 
@@ -177,38 +164,8 @@ struct Args {
     s: bool,
 }
 
-fn parse_positive_usize(s: &str) -> Result<usize, String> {
-    let value = s
-        .parse::<usize>()
-        .map_err(|e| format!("invalid positive integer: {e}"))?;
-    if value > 0 {
-        Ok(value)
-    } else {
-        Err("value must be > 0".to_string())
-    }
-}
-
-fn parse_open_unit_f64(s: &str) -> Result<f64, String> {
-    let value = s
-        .parse::<f64>()
-        .map_err(|e| format!("invalid probability: {e}"))?;
-    if value > 0.0 && value < 1.0 {
-        Ok(value)
-    } else {
-        Err("value must be > 0 and < 1".to_string())
-    }
-}
-
-/// Entry point for `hmmsim`: generate `N` iid random sequences of length `L`
-/// (sampled from the background distribution) and score each one against the
-/// first HMM in the input file, emitting bit scores to stdout.
-///
-/// Scoring kernel is selectable: default `--vit`, `--fwd`, or `--msv`.
-/// Used to calibrate E-value parameters and to benchmark DP engines.
-/// Corresponds to `process_workunit()`/`main()` in hmmer/src/hmmsim.c, much
-/// abbreviated (no MPI master/worker, no multi-HMM batch).
 pub fn run(args: Vec<String>) -> ExitCode {
-    let args_raw = args.clone();
+    let pthresh_given = command_line_has_option(&args.join(" "), "--pthresh");
     let args = Args::parse_from(&args);
     let _fast_compat = args.fast;
     let _verbose_compat = args.verbose;
@@ -246,7 +203,7 @@ pub fn run(args: Vec<String>) -> ExitCode {
         eprintln!("hmmsim --afile requires -a");
         return ExitCode::FAILURE;
     }
-    if arg_was_used(&args_raw, "--pthresh") && args.ffile.is_none() {
+    if pthresh_given && args.ffile.is_none() {
         eprintln!("hmmsim --pthresh requires --ffile");
         return ExitCode::FAILURE;
     }
@@ -395,11 +352,6 @@ pub fn run(args: Vec<String>) -> ExitCode {
     }
 
     ExitCode::SUCCESS
-}
-
-fn arg_was_used(args: &[String], flag: &str) -> bool {
-    args.iter()
-        .any(|arg| arg == flag || arg.starts_with(&format!("{flag}=")))
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]

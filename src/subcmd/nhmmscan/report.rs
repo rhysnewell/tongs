@@ -1,13 +1,5 @@
 use super::*;
 
-fn display_name(hit: &tongs::tophits::Hit, prefer_acc: bool) -> &str {
-    if prefer_acc && !hit.acc.is_empty() {
-        &hit.acc
-    } else {
-        &hit.name
-    }
-}
-
 pub(super) fn write_nhmmscan_option_header(out: &mut dyn Write, args: &Args, cmdline: &str) {
     if command_line_has_option(cmdline, "-E") {
         writeln!(
@@ -80,33 +72,6 @@ pub(super) fn write_nhmmscan_option_header(out: &mut dyn Write, args: &Args, cmd
     }
 }
 
-pub(super) fn command_line_has_option(cmdline: &str, option: &str) -> bool {
-    let compact_short = option
-        .strip_prefix('-')
-        .filter(|rest| !rest.starts_with('-') && rest.chars().count() == 1)
-        .map(|_| option);
-    cmdline.split_whitespace().any(|token| {
-        token == option
-            || token.starts_with(&format!("{option}="))
-            || compact_short
-                .is_some_and(|short| token.starts_with(short) && token.len() > short.len())
-    })
-}
-
-pub(super) fn normalize_nhmmscan_table_cmdline(cmdline: &str) -> String {
-    let mut tokens = cmdline.split_whitespace();
-    match (tokens.next(), tokens.next()) {
-        (Some(_wrapper), Some("nhmmscan")) => {
-            let rest = tokens.collect::<Vec<_>>();
-            if rest.is_empty() {
-                "nhmmscan".to_string()
-            } else {
-                format!("nhmmscan {}", rest.join(" "))
-            }
-        }
-        _ => cmdline.to_string(),
-    }
-}
 #[derive(Default)]
 pub(super) struct PipelineStats {
     pub(super) n_past_msv: u64,
@@ -369,10 +334,7 @@ pub(super) fn write_nhmmscan_pipeline_stats<W: Write + ?Sized>(
         tongs::output::fmt_g3(frac(pos_output))
     )
     .unwrap();
-    // Run-time footer (`# CPU time:` / `# Mc/sec:`) is intentionally
-    // suppressed for determinism, matching the hmmsearch/phmmer/hmmscan/
-    // jackhmmer Rust programs (which also omit these non-deterministic timing
-    // lines). C HMMER prints them, but the Rust ports do not.
+    // C prints the `# CPU time:` and `# Mc/sec:` footer, but the Rust ports omit it for determinism.
 }
 
 pub(super) fn reported_aligned_residues(th: &TopHits) -> u64 {

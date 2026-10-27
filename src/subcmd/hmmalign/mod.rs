@@ -1,7 +1,5 @@
-//! hmmalign — align sequences to a profile HMM.
-
 use std::fs::File;
-use std::io::{BufReader, Read, Write};
+use std::io::{Read, Write};
 use std::path::PathBuf;
 
 use clap::{ArgAction, Parser};
@@ -9,11 +7,11 @@ use clap::{ArgAction, Parser};
 use tongs::alphabet::Alphabet;
 use tongs::bg::Bg;
 use tongs::dp::gmx::Gmx;
-use tongs::hmmfile;
 use tongs::logsum;
 use tongs::msa;
 use tongs::profile::{self, Profile, P7_UNILOCAL};
 use tongs::sequence::{self, Sequence, SequenceFormat};
+use tongs::subcmd::inputs::read_hmms;
 use tongs::trace::State;
 use tongs::{
     simd::oprofile::{OProfile, P7O_C, P7O_J, P7O_LOOP, P7O_N},
@@ -82,12 +80,6 @@ pub(crate) struct TextMsa {
     pp_cons: String,
 }
 
-/// Entry point for `hmmalign`: align sequences to a profile HMM.
-///
-/// Reads an HMM and a sequence file, runs Forward/Backward + posterior decoding +
-/// optimal-accuracy traceback per sequence, then assembles a multiple alignment
-/// (Stockholm or A2M). Optionally merges a `--mapali` source alignment via the
-/// HMM's map and checksum. Corresponds to `main()` in hmmer/src/hmmalign.c.
 pub fn run(args: Vec<String>) -> std::process::ExitCode {
     let args = Args::parse_from(&args);
     if args.hmmfile == std::path::Path::new("-") && args.seqfile == std::path::Path::new("-") {
@@ -117,10 +109,7 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
         Phylip,
         Phylips,
     }
-    // Mirrors the format names accepted by Easel's esl_msafile_EncodeFormat()
-    // that hmmalign passes through esl_msafile_Write(). "pfam" is the Stockholm
-    // single-block variant: Easel writes Stockholm in 200-column blocks but Pfam
-    // in a single block spanning the whole alignment.
+    // Easel writes Stockholm in 200-column blocks and Pfam as one block spanning the alignment.
     let outformat = if args.outformat.eq_ignore_ascii_case("stockholm") {
         OutFormat::Stockholm
     } else if args.outformat.eq_ignore_ascii_case("pfam") {
@@ -151,7 +140,7 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
 
     logsum::p7_flogsuminit();
 
-    let hmms = read_hmms_maybe_stdin(&args.hmmfile).unwrap_or_else(|e| {
+    let hmms = read_hmms(&args.hmmfile).unwrap_or_else(|e| {
         eprintln!("Error reading HMM file: {}", e);
         std::process::exit(1);
     });
@@ -257,15 +246,6 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
         }
     }
     std::process::ExitCode::SUCCESS
-}
-
-fn read_hmms_maybe_stdin(path: &std::path::Path) -> tongs::errors::HmmerResult<Vec<tongs::Hmm>> {
-    if path == std::path::Path::new("-") {
-        let stdin = std::io::stdin();
-        hmmfile::read_hmms_auto(BufReader::new(stdin.lock()))
-    } else {
-        hmmfile::read_hmm_file_auto(path)
-    }
 }
 
 fn open_seq_file_maybe_stdin(

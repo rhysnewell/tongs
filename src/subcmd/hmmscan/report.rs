@@ -1,12 +1,5 @@
 use super::*;
 
-fn truncate_for_textw(s: &str, width: usize) -> String {
-    if width == 0 || s.chars().count() <= width {
-        return s.to_string();
-    }
-    s.chars().take(width).collect()
-}
-
 pub(super) fn write_hmmscan_score_table<W: Write + ?Sized>(
     out: &mut W,
     th: &TopHits,

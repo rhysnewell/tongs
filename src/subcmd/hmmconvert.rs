@@ -1,12 +1,11 @@
-//! hmmconvert — convert HMM files between formats.
-
-use std::io::{BufReader, Write};
+use std::io::Write;
 use std::path::PathBuf;
 
 use clap::{ArgAction, Parser};
 
 use tongs::hmmfile::{self, HmmAsciiFormat};
 use tongs::hmmfile_binary;
+use tongs::subcmd::inputs::read_hmms;
 
 #[derive(Parser)]
 #[command(
@@ -34,10 +33,6 @@ struct Args {
     hmmfile: PathBuf,
 }
 
-/// Entry point for `hmmconvert`: re-emit each HMM in the input file as HMMER3
-/// ASCII by default, as a selected legacy HMMER3 format with `--outfmt`,
-/// or HMMER3 binary with `-b`.
-/// Mirrors the default and binary output paths of `main()` in hmmer/src/hmmconvert.c.
 pub fn run(args: Vec<String>) -> std::process::ExitCode {
     let args = Args::parse_from(&args);
 
@@ -54,7 +49,7 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
         None => HmmAsciiFormat::Hmmer3f,
     };
 
-    let hmms = read_hmms_maybe_stdin(&args.hmmfile).unwrap_or_else(|e| {
+    let hmms = read_hmms(&args.hmmfile).unwrap_or_else(|e| {
         eprintln!("Error reading HMM file: {}", e);
         std::process::exit(1);
     });
@@ -86,15 +81,6 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
         std::process::exit(1);
     });
     std::process::ExitCode::SUCCESS
-}
-
-fn read_hmms_maybe_stdin(path: &std::path::Path) -> tongs::errors::HmmerResult<Vec<tongs::Hmm>> {
-    if path == std::path::Path::new("-") {
-        let stdin = std::io::stdin();
-        hmmfile::read_hmms_auto(BufReader::new(stdin.lock()))
-    } else {
-        hmmfile::read_hmm_file_auto(path)
-    }
 }
 
 #[cfg(test)]

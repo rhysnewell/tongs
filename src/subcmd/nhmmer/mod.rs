@@ -1,12 +1,3 @@
-//! nhmmer — search DNA/RNA HMMs, alignments, or sequences against nucleotide
-//! sequence databases.
-//!
-//! Uses the SSV long-target filter for genome-scale FASTA targets, matching C
-//! HMMER's nhmmer. HMM query files, Stockholm/Pfam/AFA/A2M/PSIBLAST/CLUSTAL nucleotide MSAs, and
-//! FASTA/UniProt/GenBank single-sequence queries are supported; current
-//! makehmmerdb FM-index containers are loaded by reconstructing targets for the
-//! long-target path, with container FM records used to seed candidate windows
-//! when exact consensus seeds can be mapped back to sequence coordinates.
 use std::io::{BufReader, Cursor, Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicU64;
@@ -21,7 +12,6 @@ use tongs::builder::{self, DEFAULT_WINDOW_BETA};
 use tongs::calibrate::CalibrationConfig;
 use tongs::fm_index::{FmIndex, FmInterval, MmapBytes};
 use tongs::hmm::{self as p7hmm, Hmm};
-use tongs::hmmfile;
 use tongs::logsum;
 use tongs::msa;
 use tongs::output::{fmt_evalue, fmt_g, fmt_g3};
@@ -30,6 +20,12 @@ use tongs::prior::PriorStrategy;
 use tongs::profile::{self, Profile, P7_LOCAL};
 use tongs::sequence::{self, Sequence};
 use tongs::simd::oprofile::OProfile;
+use tongs::subcmd::cli::{
+    command_line_has_option, normalize_table_cmdline, parse_positive_f64, parse_positive_usize,
+    parse_textw, parse_window_beta, parse_window_length,
+};
+use tongs::subcmd::inputs::read_hmms;
+use tongs::subcmd::outputs::create_file_or_exit;
 use tongs::tophits::TopHits;
 use tongs::util::cmath::c_logf_to_f32;
 use tongs::util::cmath::{c_exp_f64, c_log_f64};
@@ -95,20 +91,9 @@ const NHMMER_FM_WINDOW_LIMIT_REGRESSION_SIZE: usize = 4096;
 const NHMMER_FM_WINDOW_SOURCE_LIMIT: usize = 4096;
 const NHMMER_FM_MIN_EXTENDED_DIAG_SCORE_BITS: f32 = 0.0;
 
-/// Entry point for `nhmmer`: search nucleotide HMM(s) against a DNA/RNA
-/// sequence database using the long-target SSV pipeline.
-///
-/// Equivalent to the C `main` + `serial_master` + `output_header` in
-/// `hmmer/src/nhmmer.c`. Parses CLI args, reads HMM(s), configures the
-/// pipeline (filter thresholds, reporting/inclusion thresholds, model-specific
-/// cutoffs, Z override in Megabases), then for each HMM scans every target
-/// sequence (rayon-parallel) on watson and/or crick strands via
-/// `search_sequence`. Adjusts hit lnP for nhmmer's residue-based E-value
-/// space (lnP += ln(N/W)), deduplicates, thresholds, and emits the
-/// long_target text report plus optional `--tblout`.
 pub fn run(args: Vec<String>) -> std::process::ExitCode {
     let cmdline = args.join(" ");
-    let table_cmdline = normalize_nhmmer_table_cmdline(&cmdline);
+    let table_cmdline = normalize_table_cmdline(&cmdline, &["nhmmer"]);
     let requested = Requested::from_args(&args);
     let args = tongs::util::apply_hmmer_ncpu_env_default(args);
     let args = Args::parse_from(&args);
@@ -145,10 +130,7 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
     let outfile_handle;
     let stdout;
     let mut out: Box<dyn std::io::Write> = if let Some(ref path) = args.outfile {
-        outfile_handle = std::fs::File::create(path).unwrap_or_else(|e| {
-            eprintln!("Error creating output file: {}", e);
-            std::process::exit(1);
-        });
+        outfile_handle = create_file_or_exit(path, "output file");
         Box::new(std::io::BufWriter::new(outfile_handle))
     } else {
         stdout = std::io::stdout();
@@ -165,36 +147,26 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
     let do_watson = !args.crick; // top strand unless --crick only
     let do_crick = !args.watson; // bottom strand unless --watson only
 
-    let mut tblout_file = args.tblout.as_ref().map(|p| {
-        std::fs::File::create(p).unwrap_or_else(|e| {
-            eprintln!("Error creating tblout file: {}", e);
-            std::process::exit(1);
-        })
-    });
-    let mut dfamtblout_file = args.dfamtblout.as_ref().map(|p| {
-        std::fs::File::create(p).unwrap_or_else(|e| {
-            eprintln!("Error creating dfamtblout file: {}", e);
-            std::process::exit(1);
-        })
-    });
-    let mut ali_file = args.ali_outfile.as_ref().map(|p| {
-        std::fs::File::create(p).unwrap_or_else(|e| {
-            eprintln!("Error creating alignment output file: {}", e);
-            std::process::exit(1);
-        })
-    });
-    let mut aliscores_file = args.aliscoresout.as_ref().map(|p| {
-        std::fs::File::create(p).unwrap_or_else(|e| {
-            eprintln!("Error creating alignment scores output file: {}", e);
-            std::process::exit(1);
-        })
-    });
-    let mut hmmout_file = args.hmmout.as_ref().map(|p| {
-        std::fs::File::create(p).unwrap_or_else(|e| {
-            eprintln!("Error creating hmm output file: {}", e);
-            std::process::exit(1);
-        })
-    });
+    let mut tblout_file = args
+        .tblout
+        .as_ref()
+        .map(|p| create_file_or_exit(p, "tblout file"));
+    let mut dfamtblout_file = args
+        .dfamtblout
+        .as_ref()
+        .map(|p| create_file_or_exit(p, "dfamtblout file"));
+    let mut ali_file = args
+        .ali_outfile
+        .as_ref()
+        .map(|p| create_file_or_exit(p, "alignment output file"));
+    let mut aliscores_file = args
+        .aliscoresout
+        .as_ref()
+        .map(|p| create_file_or_exit(p, "alignment scores output file"));
+    let mut hmmout_file = args
+        .hmmout
+        .as_ref()
+        .map(|p| create_file_or_exit(p, "hmm output file"));
     for (query_idx, hmm) in hmms.iter().enumerate() {
         let abc = query_alphabet(&args, hmm);
         let mut bg = Bg::new(&abc);
@@ -204,10 +176,8 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
                 std::process::exit(1);
             }
         }
-        // Configure bias filter HMM with model composition — matches C
-        // nhmmer.c which calls p7_bg_SetFilter(bg, om->M, om->compo).
-        // Without this, bg.fhmm_* are default values and filter_score
-        // produces nonsense for long_target bias calculations.
+        // C's nhmmer.c calls p7_bg_SetFilter here.
+        // The default fhmm values give nonsense long-target bias scores.
         bg.set_filter(hmm.m, &hmm.compo);
 
         let mut gm = Profile::new(hmm.m, &abc);
@@ -216,11 +186,8 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
 
         let mut pli = Pipeline::new();
         pli.new_model(&gm);
-        // F1 is resolved below, after the target DB is read (it depends on
-        // FM-index vs FASTA and on whether --F1 was given). Per C
-        // `nhmmer.c:1020-1029`, when --F1 is not on the command line F1 = 0.03
-        // (FM-index) / 0.02 (FASTA); and `--max` is mutually exclusive with
-        // `--F1`, so `--max` never raises F1 to 0.3 — it only forces F2=F3=1.0.
+        // --max forces only F2 and F3, since C makes it exclusive with --F1 (nhmmer.c:1020-1029).
+        // F1 is resolved below, once the target type is known.
         let effective_f2 = if args.max { 1.0 } else { args.f2 };
         let effective_f3 = if args.max { 1.0 } else { args.f3 };
         let effective_nobias = args.max || args.nobias;
@@ -416,21 +383,11 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
             })
             .unwrap_or(residues_searched);
 
-        // C p7_tophits_ComputeNhmmerEvalues: lnP += log(N/W) per hit, where
-        // N = total residues searched (or -Z megabases, strand-adjusted) and W = window length
-        // (= om->max_length). After this, evalue = exp(lnP) directly — the
-        // database size is folded into lnP.
+        // C folds the database size into lnP as log(N/W), with W = om->max_length.
+        // So the E-value is exp(lnP) (p7_tophits_ComputeNhmmerEvalues).
         let window_length = max_length as f64;
-        // Match C p7_tophits_ComputeNhmmerEvalues exactly (hmmer/src/p7_tophits.c:796):
-        //   hit.lnP += log((float)N / (float)W);  // note (float) casts before divide
-        //   hit.dcl[0].lnP = hit.lnP;             // SET (not +=) dcl[0]
-        //   hit.sortkey    = -1.0 * hit.lnP;      // sortkey is negative lnP
-        // pre_lnP, sum_lnP, and dcl[1..] are NOT touched in C.
-        //
-        // Rust's sort_by_sortkey sorts ascending; C's hit_sorter_by_sortkey
-        // sorts descending. Since we use sortkey = hit.lnp (not -lnp) so the
-        // ascending sort puts most-significant first, we preserve that here
-        // but still skip pre_lnp/sum_lnp/dcl[1..] to match C semantics.
+        // C divides in float and sets dcl[0].lnP rather than adding (p7_tophits.c:796).
+        // sortkey is lnP, not C's -lnP, because sort_by_sortkey sorts ascending.
         let nw_ratio = (evalue_residues as f32) / (window_length as f32);
         let nhmmer_ln_nw = c_log_f64(nw_ratio as f64);
         for hit in &mut th.hits {
@@ -453,8 +410,6 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
         th.sort_by_sortkey();
         th.threshold(&pli, z, z);
 
-        // Output — nhmmer-specific long_target format (C p7_tophits_Targets
-        // with pli->long_targets = TRUE).
         write_hit_scores(&mut out, &th, &args);
 
         write_hit_annotations(&mut out, &th, hmm, &args, linewidth);
