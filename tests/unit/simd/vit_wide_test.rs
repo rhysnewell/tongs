@@ -11,7 +11,7 @@ fn bits(result: VitResult) -> Option<u32> {
 
 #[test]
 fn sixteen_lanes_score_as_eight() {
-    if !is_x86_feature_detected!("avx2") {
+    if !wide::available() {
         return;
     }
     let targets = proteins();
