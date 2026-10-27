@@ -1,7 +1,7 @@
 //! Stochastic traceback through a striped Forward matrix, a port of impl_sse/stotrace.c.
 
 use crate::trace::{State, Trace};
-use crate::util::random::MersenneTwister;
+use crate::util::random::{pick_discrete, MersenneTwister};
 use crate::util::vectorops::f_norm;
 
 use crate::simd::oprofile::*;
@@ -207,7 +207,34 @@ fn select_e_pmx(rng: &mut MersenneTwister, sx: &Striped, i: usize, ret_k: &mut u
     State::M
 }
 
-fn choose_probs<const N: usize>(rng: &mut MersenneTwister, mut probs: [f32; N]) -> usize {
-    f_norm(&mut probs);
-    rng.sample_discrete(&probs)
+fn choose_probs<const N: usize>(rng: &mut MersenneTwister, weights: [f32; N]) -> usize {
+    let roll = rng.next_f64();
+    quick_pick(roll, &weights).unwrap_or_else(|| {
+        let mut probs = weights;
+        f_norm(&mut probs);
+        pick_discrete(roll, &probs)
+    })
+}
+
+// The f32 normalize then f64 pick lands each cut within 2^-22 of the exact weight ratio, so a
+// roll 2^-16 clear of every cut picks the same index without normalizing. Closer rolls take C's path.
+fn quick_pick<const N: usize>(roll: f64, weights: &[f32; N]) -> Option<usize> {
+    const MARGIN: f64 = 1.0 / 65536.0;
+    let total = weights.iter().fold(0.0_f64, |sum, &w| sum + w as f64);
+    if !(total >= 2.0_f64.powi(-90) && total <= 2.0_f64.powi(120)) {
+        return None;
+    }
+    let r = roll * total;
+    let m = MARGIN * total;
+    let mut cut = 0.0_f64;
+    for (i, &w) in weights[..N - 1].iter().enumerate() {
+        cut += w as f64;
+        if r < cut - m {
+            return Some(i);
+        }
+        if r < cut + m {
+            return None;
+        }
+    }
+    Some(N - 1)
 }

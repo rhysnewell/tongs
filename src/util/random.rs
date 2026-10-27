@@ -6,6 +6,22 @@
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
+// Easel divides each f64 cumulative sum by the total. Scaling the roll instead rounds differently.
+pub fn pick_discrete(roll: f64, p: &[f32]) -> usize {
+    let mut norm = 0.0_f64;
+    for &pi in p {
+        norm += pi as f64;
+    }
+    let mut sum = 0.0_f64;
+    for (i, &pi) in p.iter().enumerate() {
+        sum += pi as f64;
+        if roll < sum / norm {
+            return i;
+        }
+    }
+    p.len() - 1
+}
+
 /// Legacy Easel `CreateFast` random number generator.
 pub struct MersenneTwister {
     x: u32,
@@ -71,20 +87,7 @@ impl Mt19937 {
 
     /// Sample an index using Easel `esl_rnd_FChoose` semantics.
     pub fn sample_discrete(&mut self, p: &[f32]) -> usize {
-        let roll = self.next_f64();
-        let mut norm = 0.0_f64;
-        for &pi in p {
-            norm += pi as f64;
-        }
-
-        let mut sum = 0.0_f64;
-        for (i, &pi) in p.iter().enumerate() {
-            sum += pi as f64;
-            if roll < sum / norm {
-                return i;
-            }
-        }
-        p.len() - 1
+        pick_discrete(self.next_f64(), p)
     }
 
     pub fn sample_residue(&mut self, bg_f: &[f32]) -> u8 {
@@ -123,34 +126,8 @@ impl MersenneTwister {
     }
 
     /// Sample an index from a normalized discrete distribution `p[0..n-1]`.
-    ///
-    /// Returns the index `i` selected with probability `p[i]`. Caller must
-    /// pass a normalized (sum-to-one) vector; behavior on unnormalized input
-    /// is the last index. Port of Easel `esl_rnd_FChoose` (simplified).
     pub fn sample_discrete(&mut self, p: &[f32]) -> usize {
-        // Mirror Easel `esl_rnd_FChoose` exactly. Computing in double
-        // precision is important: casting `roll` to f32 would give a [0,1]
-        // number instead of [0,1). Keep `roll` as f64, accumulate the
-        // cumulative sum in f64, normalize by the f64 sum of the weights,
-        // and compare `roll < sum / norm`.
-        let roll = self.next_f64();
-        let mut norm = 0.0_f64;
-        for &pi in p.iter() {
-            norm += pi as f64;
-        }
-        debug_assert!(norm > 0.99 && norm < 1.01);
-
-        let mut sum = 0.0_f64;
-        for (i, &pi) in p.iter().enumerate() {
-            sum += pi as f64;
-            if roll < sum / norm {
-                return i;
-            }
-        }
-        // C reaches `esl_fatal("unreached code...")` here; in practice the
-        // loop always returns. Fall back to the last index to keep a total
-        // function for callers.
-        p.len() - 1
+        pick_discrete(self.next_f64(), p)
     }
 
     /// Sample a digital residue (0..K-1) drawn from background frequencies.
