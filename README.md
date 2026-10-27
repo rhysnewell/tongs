@@ -1,6 +1,6 @@
 # tongs
 
-A fast Rust HMMER 3.4, forked from [hmmer-pure-rs](https://github.com/henriksson-lab/hmmer-pure-rs) 0.8.0 (BSD-3-Clause). The goal is identical hits to C HMMER at lower wall time, for use as a library inside [rosella](https://github.com/rhysnewell/rosella).
+A fast Rust HMMER 3.4. tongs is a fork of [hmmer-pure-rs](https://github.com/henriksson-lab/hmmer-pure-rs) 0.8.0, a Rust rebuild of [HMMER](http://hmmer.org) translated from its C source. The goal is identical hits to C HMMER at lower wall time, for use as a library inside [rosella](https://github.com/rhysnewell/rosella).
 
 On 183 GTDB marker models against 321,472 metagenome proteins (`-T 10 --domT 10 -Z 1 --domZ 1 --cpu 8`, 4-core Haswell), tongs takes 88 s, C hmmsearch 3.4 141 s, and hmmer-pure-rs 0.8.0 375 s. The per-domain table matches C on every row but one inherited `acc` value.
 
@@ -42,4 +42,4 @@ and the hmmer-pure-rs translation:
 
 ## License
 
-BSD-3-Clause, the same as HMMER.
+BSD-3-Clause, the same as HMMER and hmmer-pure-rs. `LICENSE` keeps their copyright lines, and Easel's for the bundled `src/data/esl_scorematrix.c`.
