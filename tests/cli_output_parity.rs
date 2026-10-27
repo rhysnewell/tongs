@@ -4292,7 +4292,8 @@ fn hmmpress_writes_sidecars_and_honors_force() {
     );
 }
 
-#[cfg(unix)]
+// APFS rejects file names that are not UTF-8.
+#[cfg(target_os = "linux")]
 #[test]
 fn hmmpress_preserves_non_utf8_sidecar_path_bytes() {
     use std::os::unix::ffi::{OsStrExt, OsStringExt};
@@ -7240,7 +7241,8 @@ fn hmmfetch_indexes_accessions_and_output_key_files() {
     assert!(fetched.contains("NAME  fn3"));
 }
 
-#[cfg(unix)]
+// APFS rejects file names that are not UTF-8.
+#[cfg(target_os = "linux")]
 #[test]
 fn hmmfetch_index_preserves_non_utf8_ssi_path_bytes() {
     use std::os::unix::ffi::{OsStrExt, OsStringExt};
@@ -11340,6 +11342,8 @@ fn hmmpgmd_binary_hmmdb_worker_request_carries_filter_and_null_flags() {
     }
 }
 
+// The reference C rounds through the host libm, which matches ours only on glibc.
+#[cfg(target_os = "linux")]
 #[test]
 fn hmmpgmd_seqdb_hmm_worker_request_tail_matches_c_daemon_bytes() {
     let _guard = hmmpgmd_test_guard();
@@ -13455,7 +13459,11 @@ fn accept_with_deadline(listener: &TcpListener, timeout: Duration) -> std::io::R
     let start = Instant::now();
     loop {
         match listener.accept() {
-            Ok((stream, _)) => return Ok(stream),
+            Ok((stream, _)) => {
+                // BSD sockets inherit the listener's non-blocking flag on accept.
+                stream.set_nonblocking(false)?;
+                return Ok(stream);
+            }
             Err(err)
                 if start.elapsed() < timeout && err.kind() == std::io::ErrorKind::WouldBlock =>
             {
@@ -13742,6 +13750,8 @@ fn hmmbuild_rna_matches_c_with_nucleic_transition_prior() {
 
 /// F2: `--plaplace` must thread the Laplace prior into the entropy-weight
 /// bisection, so EFFN matches C (was 0.96 vs C 74.05 on fn3).
+// The reference C rounds through the host libm, which matches ours only on glibc.
+#[cfg(target_os = "linux")]
 #[test]
 fn hmmbuild_plaplace_effn_matches_c() {
     let (c_body, r_body) =
