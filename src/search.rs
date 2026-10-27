@@ -13,6 +13,13 @@ use crate::sequence::Sequence;
 use crate::simd::oprofile::{OProfile, P7O_NXSTATES, P7O_NXTRANS};
 use crate::tophits::{Hit, TopHits};
 use crate::util::simd_env::FlushToZero;
+#[cfg(striped)]
+use crate::{
+    domaindef::{Definition, Model, Target},
+    simd::bck_filter::{backward, backward_pair, Backward},
+    simd::fwd_filter::{forward, forward_pair, Forward},
+    simd::probmx::ProbMx,
+};
 
 pub struct Query<'a> {
     pub hmm: &'a Hmm,
@@ -109,111 +116,265 @@ impl<'a> Query<'a> {
 
     pub fn scan(&self, targets: &[Sequence], first: u64) -> Scan {
         let _mode = FlushToZero::enter();
-        let mut pli = self.pli.fork();
-        let mut gm = self.gm.clone();
-        let mut om = self.om.clone();
-        let mut bg = self.bg.clone();
-        let mut hits = Vec::new();
-        let mut found = TopHits::new();
+        let mut scanner = Scanner {
+            query: self,
+            pli: self.pli.fork(),
+            gm: self.gm.clone(),
+            om: self.om.clone(),
+            bg: self.bg.clone(),
+            found: TopHits::new(),
+            hits: Vec::new(),
+            #[cfg(striped)]
+            pool: Vec::new(),
+            #[cfg(striped)]
+            forward_held: None,
+            #[cfg(striped)]
+            backward_held: None,
+            #[cfg(not(striped))]
+            _targets: std::marker::PhantomData,
+        };
         let mut lengths: Vec<Option<Lengthed>> = vec![None; LENGTH_SLOTS];
-        let mut held: Option<Held> = None;
         for (index, sq) in (first..).zip(targets) {
-            pli.n_targets = index;
+            scanner.pli.n_targets = index;
             if sq.n == 0 {
                 continue;
             }
             let slot = &mut lengths[sq.n % LENGTH_SLOTS];
             let kept = match slot {
                 Some(kept) if kept.l == sq.n => {
-                    kept.restore(&mut gm, &mut om, &mut bg);
+                    kept.restore(&mut scanner.gm, &mut scanner.om, &mut scanner.bg);
                     *kept
                 }
-                _ => *slot.insert(Lengthed::set(sq.n, &mut gm, &mut om, &mut bg)),
+                _ => *slot.insert(Lengthed::set(
+                    sq.n,
+                    &mut scanner.gm,
+                    &mut scanner.om,
+                    &mut scanner.bg,
+                )),
             };
-            #[cfg(not(striped))]
-            pli.run_configured(&gm, &om, &bg, self.hmm, sq, kept.null_sc, &mut found);
-            #[cfg(striped)]
-            {
-                let Some(filtersc) = pli.filters(&gm, &om, &bg, sq, kept.null_sc) else {
-                    continue;
-                };
-                let this = Held {
-                    sq,
-                    kept,
-                    filtersc,
-                    counted: pli.n_targets,
-                };
-                let Some(partner) = held.take() else {
-                    held = Some(this);
-                    continue;
-                };
-                let (partner_sc, this_sc) =
-                    pli.forward_pair(&om, (partner.sq, partner.kept.xf), (sq, kept.xf));
-                if pli.passes_forward(partner_sc, partner.filtersc)
-                    && pli.passes_forward(this_sc, filtersc)
-                {
-                    pli.backward_pair(&om, (partner.sq, partner.kept.xf), (sq, kept.xf));
-                }
-                self.finish(
-                    &mut pli, &mut gm, &mut om, &mut bg, &partner, partner_sc, &mut found,
-                );
-                pli.take_partner();
-                self.finish(
-                    &mut pli, &mut gm, &mut om, &mut bg, &this, this_sc, &mut found,
-                );
-            }
-            hits.append(&mut found.hits);
+            scanner.add(sq, kept);
         }
-        if let Some(last) = held {
-            last.kept.restore(&mut gm, &mut om, &mut bg);
-            let sc = pli.forward(&gm, &om, last.sq);
-            self.finish(&mut pli, &mut gm, &mut om, &mut bg, &last, sc, &mut found);
-            hits.append(&mut found.hits);
-        }
-        Scan {
-            hits,
-            n_past_msv: pli.n_past_msv,
-            n_past_bias: pli.n_past_bias,
-            n_past_vit: pli.n_past_vit,
-            n_past_fwd: pli.n_past_fwd,
-        }
-    }
-
-    // A held target is finished under its own length model and target count, as if it ran alone.
-    #[allow(clippy::too_many_arguments)]
-    fn finish(
-        &self,
-        pli: &mut Pipeline,
-        gm: &mut Profile,
-        om: &mut OProfile,
-        bg: &mut Bg,
-        held: &Held,
-        fwd_sc: f32,
-        found: &mut TopHits,
-    ) {
-        let counted = pli.n_targets;
-        pli.n_targets = held.counted;
-        held.kept.restore(gm, om, bg);
-        pli.after_forward(
-            gm,
-            om,
-            bg,
-            self.hmm,
-            held.sq,
-            held.kept.null_sc,
-            held.filtersc,
-            fwd_sc,
-            found,
-        );
-        pli.n_targets = counted.max(held.counted);
+        scanner.finish()
     }
 }
 
-struct Held<'t> {
+#[cfg(striped)]
+#[derive(Default)]
+struct Parse {
+    fwd: ProbMx,
+    bck: ProbMx,
+}
+
+#[cfg(striped)]
+struct Pending<'t> {
     sq: &'t Sequence,
     kept: Lengthed,
     filtersc: f32,
     counted: u64,
+    fwd_sc: f32,
+    parse: Parse,
+}
+
+#[cfg(striped)]
+impl Pending<'_> {
+    fn target(&self) -> Target<'_> {
+        Target {
+            dsq: &self.sq.dsq,
+            l: self.sq.n,
+            null_sc: self.kept.null_sc,
+            xf: self.kept.xf,
+            fwd: &self.parse.fwd,
+            bck: &self.parse.bck,
+        }
+    }
+}
+
+// Filter survivors pair up for Forward, and Forward survivors pair up in file order for Backward
+// and domain definition, so a survivor whose partner failed waits for the next one.
+struct Scanner<'q, 't> {
+    query: &'q Query<'q>,
+    pli: Pipeline,
+    gm: Profile,
+    om: OProfile,
+    bg: Bg,
+    found: TopHits,
+    hits: Vec<Hit>,
+    #[cfg(striped)]
+    pool: Vec<Parse>,
+    #[cfg(striped)]
+    forward_held: Option<Pending<'t>>,
+    #[cfg(striped)]
+    backward_held: Option<Pending<'t>>,
+    #[cfg(not(striped))]
+    _targets: std::marker::PhantomData<&'t Sequence>,
+}
+
+impl<'t> Scanner<'_, 't> {
+    #[cfg(not(striped))]
+    fn add(&mut self, sq: &'t Sequence, kept: Lengthed) {
+        let hmm = self.query.hmm;
+        self.pli.run_configured(
+            &self.gm,
+            &self.om,
+            &self.bg,
+            hmm,
+            sq,
+            kept.null_sc,
+            &mut self.found,
+        );
+        self.hits.append(&mut self.found.hits);
+    }
+
+    #[cfg(not(striped))]
+    fn finish(self) -> Scan {
+        self.into_scan()
+    }
+
+    #[cfg(striped)]
+    fn add(&mut self, sq: &'t Sequence, kept: Lengthed) {
+        let Some(filtersc) = self
+            .pli
+            .filters(&self.gm, &self.om, &self.bg, sq, kept.null_sc)
+        else {
+            return;
+        };
+        let this = Pending {
+            sq,
+            kept,
+            filtersc,
+            counted: self.pli.n_targets,
+            fwd_sc: 0.0,
+            parse: self.pool.pop().unwrap_or_default(),
+        };
+        let Some(mut partner) = self.forward_held.take() else {
+            self.forward_held = Some(this);
+            return;
+        };
+        let mut this = this;
+        let m = self.om.m;
+        partner.parse.fwd.resize_parser(m, partner.sq.n);
+        this.parse.fwd.resize_parser(m, this.sq.n);
+        let mut a = Forward::new(
+            &partner.sq.dsq,
+            0,
+            partner.sq.n,
+            partner.kept.xf,
+            &mut partner.parse.fwd,
+        );
+        let mut b = Forward::new(
+            &this.sq.dsq,
+            0,
+            this.sq.n,
+            this.kept.xf,
+            &mut this.parse.fwd,
+        );
+        (partner.fwd_sc, this.fwd_sc) = unsafe { forward_pair(&self.om, &mut a, &mut b) };
+        self.queue(partner);
+        self.queue(this);
+    }
+
+    #[cfg(striped)]
+    fn queue(&mut self, p: Pending<'t>) {
+        if !self.pli.survives_forward(p.fwd_sc, p.filtersc) {
+            self.pool.push(p.parse);
+            return;
+        }
+        let Some(mut first) = self.backward_held.take() else {
+            self.backward_held = Some(p);
+            return;
+        };
+        let mut second = p;
+        let m = self.om.m;
+        first.parse.bck.resize_parser(m, first.sq.n);
+        second.parse.bck.resize_parser(m, second.sq.n);
+        unsafe {
+            backward_pair(
+                &self.om,
+                &mut backward_lane(&mut first),
+                &mut backward_lane(&mut second),
+            )
+        };
+        let model = Model {
+            gm: &self.gm,
+            om: &self.om,
+            hmm: self.query.hmm,
+            bg: &self.bg,
+        };
+        let definitions = self.pli.define(&model, [&first.target(), &second.target()]);
+        for (p, definition) in [first, second].into_iter().zip(definitions) {
+            self.report(p, definition);
+        }
+    }
+
+    #[cfg(striped)]
+    fn report(&mut self, p: Pending<'t>, definition: Definition) {
+        let counted = self.pli.n_targets;
+        self.pli.n_targets = p.counted;
+        let (sq, null_sc) = (p.sq, p.kept.null_sc);
+        self.pli.report(
+            &self.gm,
+            &self.bg,
+            sq,
+            null_sc,
+            p.fwd_sc,
+            definition,
+            &mut self.found,
+        );
+        self.pli.n_targets = counted.max(p.counted);
+        self.hits.append(&mut self.found.hits);
+        self.pool.push(p.parse);
+    }
+
+    #[cfg(striped)]
+    fn finish(mut self) -> Scan {
+        if let Some(mut last) = self.forward_held.take() {
+            last.parse.fwd.resize_parser(self.om.m, last.sq.n);
+            let mut lane = Forward::new(
+                &last.sq.dsq,
+                0,
+                last.sq.n,
+                last.kept.xf,
+                &mut last.parse.fwd,
+            );
+            last.fwd_sc = unsafe { forward(&self.om, &mut lane) };
+            self.queue(last);
+        }
+        if let Some(mut last) = self.backward_held.take() {
+            last.parse.bck.resize_parser(self.om.m, last.sq.n);
+            unsafe { backward(&self.om, &mut backward_lane(&mut last)) };
+            let model = Model {
+                gm: &self.gm,
+                om: &self.om,
+                hmm: self.query.hmm,
+                bg: &self.bg,
+            };
+            let [definition] = self.pli.define(&model, [&last.target()]);
+            self.report(last, definition);
+        }
+        self.into_scan()
+    }
+
+    fn into_scan(self) -> Scan {
+        Scan {
+            hits: self.hits,
+            n_past_msv: self.pli.n_past_msv,
+            n_past_bias: self.pli.n_past_bias,
+            n_past_vit: self.pli.n_past_vit,
+            n_past_fwd: self.pli.n_past_fwd,
+        }
+    }
+}
+
+#[cfg(striped)]
+fn backward_lane<'p>(p: &'p mut Pending) -> Backward<'p> {
+    Backward::new(
+        &p.sq.dsq,
+        0,
+        p.sq.n,
+        p.kept.xf,
+        Some(&p.parse.fwd.row_scale),
+        &mut p.parse.bck,
+    )
 }
 
 // Each query scans its own slices of the block, so a large set of models parallelises over models

@@ -6,8 +6,6 @@ use crate::sequence::Sequence;
 #[cfg(striped)]
 use crate::simd::msv_filter::MsvResult;
 use crate::simd::oprofile::OProfile;
-#[cfg(striped)]
-use crate::simd::oprofile::{P7O_NXSTATES, P7O_NXTRANS};
 #[cfg(target_arch = "x86_64")]
 use crate::simd::vit_filter::p7_viterbi_filter;
 #[cfg(striped)]
@@ -15,6 +13,8 @@ use crate::simd::vit_filter::VitResult;
 use crate::stats;
 use crate::tophits::*;
 use crate::util::cmath::{c_exp_f64, c_log_f64};
+
+use crate::domaindef::{Definition, Model, Settings, Target};
 
 use super::{
     forward_pvalue, msv_pvalue, nats_to_bits_from_scores, reconstruction_score_nats,
@@ -216,63 +216,33 @@ impl Pipeline {
         }
     }
 
-    // Two filter survivors share one Forward pass, each under its own length model. The first's
-    // matrix is left where the rest of the pipeline reads it, and `take_partner` swaps the second in.
-    #[cfg(striped)]
-    pub(crate) fn forward_pair(
-        &mut self,
-        om: &OProfile,
-        first: (&Sequence, [[f32; P7O_NXTRANS]; P7O_NXSTATES]),
-        second: (&Sequence, [[f32; P7O_NXTRANS]; P7O_NXSTATES]),
-    ) -> (f32, f32) {
-        use crate::simd::fwd_filter::{forward_pair, Forward};
-        let (a, a_xf) = first;
-        let (b, b_xf) = second;
-        self.fwd_pmx.resize_parser(om.m, a.n);
-        self.pair_pmx.resize_parser(om.m, b.n);
-        let mut a = Forward::new(&a.dsq, 0, a.n, a_xf, &mut self.fwd_pmx);
-        let mut b = Forward::new(&b.dsq, 0, b.n, b_xf, &mut self.pair_pmx);
-        unsafe { forward_pair(om, &mut a, &mut b) }
-    }
-
-    #[cfg(striped)]
-    pub(crate) fn backward_pair(
-        &mut self,
-        om: &OProfile,
-        first: (&Sequence, [[f32; P7O_NXTRANS]; P7O_NXSTATES]),
-        second: (&Sequence, [[f32; P7O_NXTRANS]; P7O_NXSTATES]),
-    ) {
-        use crate::simd::bck_filter::{backward_pair, Backward};
-        let (a, a_xf) = first;
-        let (b, b_xf) = second;
-        let pmx = self.domain_scratch.backward_parts();
-        pmx.resize_parser(om.m, a.n);
-        let mut a = Backward::new(&a.dsq, 0, a.n, a_xf, Some(&self.fwd_pmx.row_scale), pmx);
-        let pair = &mut self.pair_bck;
-        pair.ready = true;
-        pair.pmx.resize_parser(om.m, b.n);
-        let mut b = Backward::new(
-            &b.dsq,
-            0,
-            b.n,
-            b_xf,
-            Some(&self.pair_pmx.row_scale),
-            &mut pair.pmx,
-        );
-        unsafe { backward_pair(om, &mut a, &mut b) }
-    }
-
-    #[cfg(striped)]
-    pub(crate) fn take_partner(&mut self) {
-        std::mem::swap(&mut self.fwd_pmx, &mut self.pair_pmx);
-        let pair = &mut self.pair_bck;
-        self.domain_scratch
-            .trade_backward(&mut pair.pmx, &mut pair.ready);
-    }
-
     pub(crate) fn passes_forward(&self, fwd_sc: f32, filtersc: f32) -> bool {
         let pval = forward_pvalue(fwd_sc, filtersc, &self.evparam);
         self.do_max || pval <= self.f3 || pval.is_nan()
+    }
+
+    pub(crate) fn survives_forward(&mut self, fwd_sc: f32, filtersc: f32) -> bool {
+        let passes = self.passes_forward(fwd_sc, filtersc);
+        self.n_past_fwd += passes as u64;
+        passes
+    }
+
+    pub(crate) fn settings(&self) -> Settings {
+        Settings {
+            seed: self.seed,
+            make_alignment: self.do_alignment,
+            make_alignment_display: self.do_alignment_display,
+            long_target: self.long_target,
+            do_null2: self.do_null2,
+        }
+    }
+
+    pub(crate) fn define<const N: usize>(
+        &mut self,
+        model: &Model,
+        targets: [&Target; N],
+    ) -> [Definition; N] {
+        crate::domaindef::define(model, targets, self.settings(), &mut self.domains)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -288,37 +258,65 @@ impl Pipeline {
         fwd_sc: f32,
         th: &mut TopHits,
     ) -> bool {
-        let l = sq.n;
-        #[cfg(striped)]
-        let fwd_pmx_for_domains = Some(&self.fwd_pmx);
-        if !self.passes_forward(fwd_sc, filtersc) {
+        if !self.survives_forward(fwd_sc, filtersc) {
             return false;
         }
-        self.n_past_fwd += 1;
+        #[cfg(striped)]
+        {
+            self.bck_pmx.resize_parser(om.m, sq.n);
+            unsafe {
+                crate::simd::bck_filter::backward_parser_pmx(
+                    &sq.dsq,
+                    sq.n,
+                    om,
+                    Some(&self.fwd_pmx.row_scale),
+                    &mut self.bck_pmx,
+                )
+            };
+        }
+        let target = Target {
+            dsq: &sq.dsq,
+            l: sq.n,
+            null_sc,
+            #[cfg(striped)]
+            xf: om.xf,
+            #[cfg(striped)]
+            fwd: &self.fwd_pmx,
+            #[cfg(striped)]
+            bck: &self.bck_pmx,
+        };
+        let model = Model {
+            gm,
+            #[cfg(striped)]
+            om,
+            hmm,
+            bg,
+        };
+        #[cfg(not(striped))]
+        let _ = om;
+        let [definition] =
+            crate::domaindef::define(&model, [&target], self.settings(), &mut self.domains);
+        self.report(gm, bg, sq, null_sc, fwd_sc, definition, th)
+    }
 
-        // Sequence passes all filters — run domain definition
-        let (mut domains, nexpected, _, pipeline_seq_correction_sum, domain_stats) =
-            crate::domaindef::define_domains(
-                &sq.dsq,
-                l,
-                gm,
-                Some(om),
-                #[cfg(striped)]
-                fwd_pmx_for_domains,
-                #[cfg(not(striped))]
-                None,
-                Some(fwd_sc),
-                hmm,
-                bg,
-                null_sc,
-                self.seed,
-                #[cfg(striped)]
-                &mut self.domain_scratch,
-                self.do_alignment,
-                self.do_alignment_display,
-                self.long_target,
-                self.do_null2,
-            );
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn report(
+        &mut self,
+        gm: &Profile,
+        bg: &Bg,
+        sq: &Sequence,
+        null_sc: f32,
+        fwd_sc: f32,
+        definition: Definition,
+        th: &mut TopHits,
+    ) -> bool {
+        let l = sq.n;
+        let Definition {
+            mut domains,
+            nexpected,
+            seq_bias: pipeline_seq_correction_sum,
+            stats: domain_stats,
+        } = definition;
         if self.long_target {
             domains.retain(|dom| {
                 let span = dom

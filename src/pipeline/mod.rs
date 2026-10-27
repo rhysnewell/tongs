@@ -88,18 +88,8 @@ pub struct Pipeline {
     #[cfg(striped)]
     fwd_pmx: crate::simd::probmx::ProbMx,
     #[cfg(striped)]
-    pair_pmx: crate::simd::probmx::ProbMx,
-    #[cfg(striped)]
-    pair_bck: PairBackward,
-    #[cfg(striped)]
-    domain_scratch: crate::domaindef::DomainSimdScratch,
-}
-
-#[cfg(striped)]
-#[derive(Default)]
-pub(crate) struct PairBackward {
-    pmx: crate::simd::probmx::ProbMx,
-    ready: bool,
+    bck_pmx: crate::simd::probmx::ProbMx,
+    domains: crate::domaindef::Scratch,
 }
 
 impl Pipeline {
@@ -149,11 +139,8 @@ impl Pipeline {
             #[cfg(striped)]
             fwd_pmx: Default::default(),
             #[cfg(striped)]
-            pair_pmx: Default::default(),
-            #[cfg(striped)]
-            pair_bck: PairBackward::default(),
-            #[cfg(striped)]
-            domain_scratch: crate::domaindef::DomainSimdScratch::new(),
+            bck_pmx: Default::default(),
+            domains: Default::default(),
         }
     }
 
@@ -178,11 +165,8 @@ impl Pipeline {
             #[cfg(striped)]
             fwd_pmx: Default::default(),
             #[cfg(striped)]
-            pair_pmx: Default::default(),
-            #[cfg(striped)]
-            pair_bck: PairBackward::default(),
-            #[cfg(striped)]
-            domain_scratch: crate::domaindef::DomainSimdScratch::new(),
+            bck_pmx: Default::default(),
+            domains: Default::default(),
             ..*self
         }
     }
