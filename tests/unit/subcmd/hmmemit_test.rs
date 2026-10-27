@@ -67,10 +67,7 @@ fn hmmemit_minl_minu_range_is_validated() {
 
 #[test]
 fn rejustify_splits_inserts_like_easel() {
-    // One node (k=1) with an insert run of width 3 holding two residues.
-    // matmap[1]=0 (match col), insert run = cols 1..=3, match2 at col 4.
-    // Easel: nres=2 -> nleft=1; left residue stays at col1, the other
-    // flushes right to col3, gap in the middle: "s.s".
+    // Easel gives nleft=1 for two residues in a width-3 insert run, so the other flushes right.
     let abc = Alphabet::amino();
     let inscount = vec![0usize, 3usize, 0usize];
     let matmap = vec![0usize, 0usize, 4usize];
@@ -127,7 +124,7 @@ fn core_alignment_renders_stockholm_shape() {
 
 #[test]
 fn profile_emit_matches_c_fixed_seed_fn3_modes() {
-    let hmm = hmmfile::read_hmm_file(std::path::Path::new(concat!(
+    let hmm = tongs::hmmfile::read_hmm_file(std::path::Path::new(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/hmmer/tutorial/fn3.hmm"
     )))
