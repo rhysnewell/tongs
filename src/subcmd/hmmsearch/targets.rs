@@ -42,16 +42,16 @@ impl Reader {
         }
     }
 
-    pub(super) fn next_block(&mut self, budget: usize) -> Option<(u64, Vec<Sequence>)> {
+    pub(super) fn next_block(
+        &mut self,
+        budget: usize,
+    ) -> Result<Option<(u64, Vec<Sequence>)>, String> {
         let first = self.count;
         let mut block = Vec::new();
         let mut held = 0;
         while held < budget && self.limit.is_none_or(|limit| (self.count as usize) < limit) {
             let mut sq = Sequence::new();
-            let more = self.sqf.read(&mut sq).unwrap_or_else(|e| {
-                eprintln!("Error reading sequence file: {}", e);
-                std::process::exit(1);
-            });
+            let more = self.sqf.read(&mut sq).map_err(|e| e.to_string())?;
             if !more {
                 break;
             }
@@ -60,7 +60,7 @@ impl Reader {
             self.residues += sq.n as u64;
             block.push(sq);
         }
-        (!block.is_empty()).then_some((first, block))
+        Ok((!block.is_empty()).then_some((first, block)))
     }
 }
 

@@ -386,7 +386,18 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
         (setup.join().unwrap(), block)
     });
     let mut scans = queries.iter().map(|_| Scan::default()).collect::<Vec<_>>();
-    while let Some((first, targets)) = block.take() {
+    loop {
+        let (first, targets) = match std::mem::replace(&mut block, Ok(None)) {
+            Ok(Some(next)) => next,
+            Ok(None) => break,
+            Err(e) => {
+                // C reads targets inside the first query's search, so its header precedes the error.
+                report::write_query_header(&mut out, queries[0].hmm);
+                out.flush().unwrap();
+                eprintln!("Error reading sequence file: {}", e);
+                std::process::exit(1);
+            }
+        };
         let found = std::thread::scope(|s| {
             let scan = s.spawn(|| scan_all(&queries, &targets, first));
             block = reader.next_block(BLOCK_RESIDUES);

@@ -19,6 +19,16 @@ pub(super) struct Sinks {
     pub ali: Option<BufWriter<File>>,
 }
 
+pub(super) fn write_query_header(out: &mut dyn Write, hmm: &tongs::Hmm) {
+    writeln!(out, "Query:       {}  [M={}]", hmm.name, hmm.m).unwrap();
+    if let Some(acc) = hmm.acc.as_deref().filter(|acc| !acc.is_empty()) {
+        writeln!(out, "Accession:   {}", acc).unwrap();
+    }
+    if let Some(desc) = hmm.desc.as_deref().filter(|desc| !desc.is_empty()) {
+        writeln!(out, "Description: {}", desc).unwrap();
+    }
+}
+
 pub(super) fn write(
     sinks: &mut Sinks,
     args: &Args,
@@ -32,17 +42,7 @@ pub(super) fn write(
     let abc = Alphabet::new(hmm.abc_type);
     let textw = if args.notextw { 0 } else { args.textw };
     let out = &mut sinks.out;
-    writeln!(out, "Query:       {}  [M={}]", hmm.name, hmm.m).unwrap();
-    if let Some(ref acc) = hmm.acc {
-        if !acc.is_empty() {
-            writeln!(out, "Accession:   {}", acc).unwrap();
-        }
-    }
-    if let Some(ref desc) = hmm.desc {
-        if !desc.is_empty() {
-            writeln!(out, "Description: {}", desc).unwrap();
-        }
-    }
+    write_query_header(out, hmm);
 
     let mut pli = query.pli.fork();
     pli.n_past_msv = scan.n_past_msv;
