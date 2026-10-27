@@ -184,13 +184,13 @@ fn mean_position_relative_entropy(h: &tongs::Hmm, bg: &Bg) -> f32 {
     for (node, &occ) in mocc.iter().enumerate().take(h.m + 1).skip(1) {
         mre += (occ as f64) * f_rel_entropy_c(&h.mat[node][..h.abc_k], &bg.f[..h.abc_k]) as f64;
     }
-    mre /= fsum_c(&mocc[1..=h.m]) as f64;
+    mre /= tongs::util::vectorops::f_sum(&mocc[1..=h.m]) as f64;
 
     if h.m < 2 {
         return mre as f32;
     }
 
-    let trans_occ_sum = fsum_c(&mocc[2..=h.m]);
+    let trans_occ_sum = tongs::util::vectorops::f_sum(&mocc[2..=h.m]);
     if trans_occ_sum <= 0.0 {
         return mre as f32;
     }
@@ -233,18 +233,6 @@ fn composition_kld(h: &tongs::Hmm, bg: &Bg) -> f32 {
     }
 
     rel_entropy(&avg, &bg.f[..h.abc_k]) as f32
-}
-
-fn fsum_c(values: &[f32]) -> f32 {
-    let mut sum = 0.0_f32;
-    let mut c = 0.0_f32;
-    for &value in values {
-        let y = value - c;
-        let t = sum + y;
-        c = (t - sum) - y;
-        sum = t;
-    }
-    sum
 }
 
 fn f_rel_entropy_c(p: &[f32], q: &[f32]) -> f32 {

@@ -108,9 +108,10 @@ pub fn d_max(vec: &[f64]) -> f64 {
     vec.iter().copied().fold(f64::NEG_INFINITY, f64::max)
 }
 
-/// Return the maximum element in `vec`. Port of `esl_vec_FMax`.
 pub fn f_max(vec: &[f32]) -> f32 {
-    vec.iter().copied().fold(f32::NEG_INFINITY, f32::max)
+    vec[1..]
+        .iter()
+        .fold(vec[0], |best, &v| if v > best { v } else { best })
 }
 
 /// Return the minimum element in `vec`. Port of `esl_vec_FMin`.
@@ -171,24 +172,20 @@ pub fn i_reverse(vec: &[i32], rev: &mut [i32]) {
 
 // ===== Normalize =====
 
-/// Normalize a probability vector so it sums to 1.0. Port of `esl_vec_DNorm`.
-///
-/// If the current sum is 0, the vector is left untouched (the C version
-/// fills with 1/n).
+// Easel divides by the sum rather than scaling by its reciprocal, and the rounding differs.
 pub fn d_norm(vec: &mut [f64]) {
     let sum = d_sum(vec);
     if sum != 0.0 {
-        d_scale(vec, 1.0 / sum);
+        vec.iter_mut().for_each(|v| *v /= sum);
     } else if !vec.is_empty() {
         d_set(vec, 1.0 / vec.len() as f64);
     }
 }
 
-/// Normalize a probability vector so it sums to 1.0. Port of `esl_vec_FNorm`.
 pub fn f_norm(vec: &mut [f32]) {
     let sum = f_sum(vec);
     if sum != 0.0 {
-        f_scale(vec, 1.0 / sum);
+        vec.iter_mut().for_each(|v| *v /= sum);
     } else if !vec.is_empty() {
         f_set(vec, 1.0 / vec.len() as f32);
     }
@@ -206,26 +203,31 @@ pub fn f_exp(vec: &mut [f32]) {
     vec.iter_mut().for_each(|v| *v = c_expf_to_f32(*v));
 }
 
-/// Convert an unnormalized log p-vector into a normalized probability vector.
-///
-/// Subtracts the max before exponentiating to avoid overflow; on return
-/// `vec` sums to 1.0 in probability space. Port of `esl_vec_FLogNorm`.
-pub fn f_lognorm(vec: &mut [f32]) {
+// esl_vec_FLogSum() skips terms more than 50 nats below the maximum.
+pub fn f_log_sum(vec: &[f32]) -> f32 {
     let max = f_max(vec);
+    if max == f32::INFINITY {
+        return f32::INFINITY;
+    }
     let mut sum = 0.0_f32;
-    for v in vec.iter() {
-        sum += c_expf_to_f32(*v - max);
+    for &v in vec {
+        if v > max - 50.0 {
+            sum += c_expf_to_f32(v - max);
+        }
     }
-    let log_sum = max + c_logf_to_f32(sum);
-    for v in vec.iter_mut() {
-        *v -= log_sum;
-    }
+    c_logf_to_f32(sum) + max
+}
+
+pub fn f_lognorm(vec: &mut [f32]) {
+    let denom = f_log_sum(vec);
+    f_increment(vec, -denom);
     f_exp(vec);
+    f_norm(vec);
 }
 
 /// Convert an unnormalized log_2 p-vector into a normalized probability vector.
 ///
-/// Same shift-by-max stabilization as `f_lognorm`, but in log base 2.
+/// Shift-by-max stabilization in log base 2.
 /// Port of `esl_vec_FLog2Norm`.
 pub fn f_log2norm(vec: &mut [f32]) {
     let max = f_max(vec);

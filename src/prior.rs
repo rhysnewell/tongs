@@ -36,7 +36,7 @@ fn apply_dirichlet_f64(counts: &[f32], alpha: &[f64]) -> Vec<f32> {
         }
     }
 
-    dnorm(&mut result);
+    crate::util::vectorops::d_norm(&mut result);
 
     result.iter().map(|&v| v as f32).collect()
 }
@@ -139,7 +139,7 @@ pub fn apply_mixture_dirichlet(counts: &[f32]) -> Vec<f32> {
     }
 
     // Normalize
-    dnorm(&mut result);
+    crate::util::vectorops::d_norm(&mut result);
 
     result.iter().map(|&v| v as f32).collect()
 }
@@ -197,23 +197,7 @@ fn dlog_norm(values: &mut [f64]) {
     for value in values.iter_mut() {
         *value = c_exp_f64(*value - denom);
     }
-    dnorm(values);
-}
-
-/// Normalise a non-negative vector to sum to 1, falling back to the uniform
-/// distribution when the sum is zero (mirrors `esl_vec_DNorm`).
-fn dnorm(values: &mut [f64]) {
-    let sum: f64 = values.iter().sum();
-    if sum != 0.0 {
-        for value in values {
-            *value /= sum;
-        }
-    } else if !values.is_empty() {
-        let uniform = 1.0 / values.len() as f64;
-        for value in values {
-            *value = uniform;
-        }
-    }
+    crate::util::vectorops::d_norm(values);
 }
 
 /// Default transition Dirichlet prior parameters.
@@ -329,7 +313,7 @@ fn apply_mixture_dirichlet_with_components(
         }
     }
 
-    dnorm(&mut result);
+    crate::util::vectorops::d_norm(&mut result);
 
     result.iter().map(|&v| v as f32).collect()
 }
@@ -435,8 +419,8 @@ fn apply_none_priors(hmm: &mut crate::hmm::Hmm) {
     let m = hmm.m;
 
     for node in 0..=m {
-        fnorm(&mut hmm.mat[node][..k]);
-        fnorm(&mut hmm.ins[node][..k]);
+        crate::util::vectorops::f_norm(&mut hmm.mat[node][..k]);
+        crate::util::vectorops::f_norm(&mut hmm.ins[node][..k]);
         // Transition groups: TMAT (MM,MI,MD), TINS (IM,II), TDEL (DM,DD).
         fnorm_t(&mut hmm.t[node], MM, 3);
         fnorm_t(&mut hmm.t[node], IM, 2);
@@ -456,26 +440,10 @@ fn apply_none_priors(hmm: &mut crate::hmm::Hmm) {
     }
 }
 
-/// `esl_vec_FNorm`: normalise a non-negative vector to sum to 1; if the sum is
-/// zero, set the uniform distribution.
-fn fnorm(values: &mut [f32]) {
-    let sum: f32 = values.iter().sum();
-    if sum != 0.0 {
-        for v in values.iter_mut() {
-            *v /= sum;
-        }
-    } else if !values.is_empty() {
-        let uniform = 1.0 / values.len() as f32;
-        for v in values.iter_mut() {
-            *v = uniform;
-        }
-    }
-}
-
 /// FNorm a contiguous transition group `t[start..start+n]` (indices follow the
 /// p7H_* layout: MM..MD, IM..II, DM..DD).
 fn fnorm_t(t: &mut [f32], start: usize, n: usize) {
-    fnorm(&mut t[start..start + n]);
+    crate::util::vectorops::f_norm(&mut t[start..start + n]);
 }
 
 fn apply_laplace_priors(hmm: &mut crate::hmm::Hmm) {

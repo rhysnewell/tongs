@@ -7,8 +7,8 @@ use crate::alphabet::Dsq;
 use crate::dp::gmx::*;
 use crate::profile::*;
 use crate::trace::{State, Trace};
-use crate::util::cmath::c_expf_to_f32;
 use crate::util::random::MersenneTwister;
+use crate::util::vectorops::{f_lognorm, f_norm};
 
 #[cfg(striped)]
 use crate::simd::oprofile::*;
@@ -250,40 +250,7 @@ fn select_e_pmx(rng: &mut MersenneTwister, sx: &Striped, i: usize, ret_k: &mut u
 #[cfg(striped)]
 fn choose_probs<const N: usize>(rng: &mut MersenneTwister, mut probs: [f32; N]) -> usize {
     f_norm(&mut probs);
-    let roll = rng.next_f64();
-    let total: f64 = probs.iter().map(|&p| p as f64).sum();
-    let mut cumsum = 0.0_f64;
-    for (idx, &p) in probs.iter().enumerate() {
-        cumsum += p as f64;
-        if roll < cumsum / total {
-            return idx;
-        }
-    }
-    N - 1
-}
-
-/// Normalize a slice to sum to 1.0 using Kahan summation; if the sum is zero,
-/// assigns a uniform distribution. Counterpart of Easel's `esl_vec_FNorm`.
-#[cfg(striped)]
-fn f_norm(vec: &mut [f32]) {
-    let mut sum = 0.0_f32;
-    let mut c = 0.0_f32;
-    for &v in vec.iter() {
-        let y = v - c;
-        let t = sum + y;
-        c = (t - sum) - y;
-        sum = t;
-    }
-    if sum != 0.0 {
-        for v in vec {
-            *v /= sum;
-        }
-    } else {
-        let p = 1.0 / vec.len() as f32;
-        for v in vec {
-            *v = p;
-        }
-    }
+    rng.sample_discrete(&probs)
 }
 
 /// Stochastic traceback of a Forward matrix.
@@ -455,75 +422,12 @@ pub fn g_stochastic_trace(
     tr
 }
 
-/// Kahan-summed max of a slice. Port of `esl_vec_FMax`.
-fn f_max(vec: &[f32]) -> f32 {
-    let mut best = vec[0];
-    for &v in &vec[1..] {
-        if v > best {
-            best = v;
-        }
-    }
-    best
-}
-
-/// Log-sum-exp over a vector. Faithful port of `esl_vec_FLogSum`
-/// (hmmer/easel/esl_vectorops.c), including the `> max - 50.` cutoff.
-fn f_log_sum(vec: &[f32]) -> f32 {
-    let max = f_max(vec);
-    if max == f32::INFINITY {
-        return f32::INFINITY;
-    }
-    let mut sum = 0.0_f32;
-    for &v in vec {
-        if v > max - 50.0 {
-            sum += c_expf_to_f32(v - max);
-        }
-    }
-    crate::util::cmath::c_logf_to_f32(sum) + max
-}
-
-/// Kahan-summed total. Port of `esl_vec_FSum`.
-fn f_sum(vec: &[f32]) -> f32 {
-    let mut sum = 0.0_f32;
-    let mut c = 0.0_f32;
-    for &v in vec {
-        let y = v - c;
-        let t = sum + y;
-        c = (t - sum) - y;
-        sum = t;
-    }
-    sum
-}
-
-/// In-place log-space normalization to a probability vector. Faithful port of
-/// `esl_vec_FLogNorm` = FLogSum -> FIncrement(-denom) -> FExp -> FNorm.
-fn f_log_norm(vec: &mut [f32]) {
-    let denom = f_log_sum(vec);
-    for v in vec.iter_mut() {
-        *v += -denom;
-    }
-    for v in vec.iter_mut() {
-        *v = c_expf_to_f32(*v);
-    }
-    let sum = f_sum(vec);
-    if sum != 0.0 {
-        for v in vec.iter_mut() {
-            *v /= sum;
-        }
-    } else {
-        let n = vec.len() as f32;
-        for v in vec.iter_mut() {
-            *v = 1.0 / n;
-        }
-    }
-}
-
 /// Normalize two log-space scores with `esl_vec_FLogNorm` and draw 0/1 with
 /// `esl_rnd_FChoose` (= `sample_discrete`). Mirrors C's
 /// `esl_vec_FLogNorm(sc,2); esl_rnd_FChoose(r, sc, 2)`.
 fn sample_two(rng: &mut MersenneTwister, a: f32, b: f32) -> usize {
     let mut sc = [a, b];
-    f_log_norm(&mut sc);
+    f_lognorm(&mut sc);
     rng.sample_discrete(&sc)
 }
 
@@ -531,6 +435,6 @@ fn sample_two(rng: &mut MersenneTwister, a: f32, b: f32) -> usize {
 /// with `esl_rnd_FChoose` (= `sample_discrete`).
 fn sample_from(rng: &mut MersenneTwister, scores: &[f32]) -> usize {
     let mut sc = scores.to_vec();
-    f_log_norm(&mut sc);
+    f_lognorm(&mut sc);
     rng.sample_discrete(&sc)
 }
