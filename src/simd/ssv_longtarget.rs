@@ -1,6 +1,6 @@
 //! SSV filter for long target sequences (nhmmer/Infernal).
 //! Port of p7_SSVFilter_longtarget() from impl_sse/msvfilter.c.
-#![allow(clippy::needless_range_loop)]
+#![allow(clippy::needless_range_loop, clippy::missing_safety_doc)]
 //!
 //! Slides a window across a long DNA/RNA sequence, returning hit windows
 //! where the SSV score exceeds a P-value threshold. Used by nhmmer and

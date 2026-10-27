@@ -293,7 +293,8 @@ mod tests {
         assert!(!ssi::path_with_appended_suffix(&hmm_path, ".h3i").exists());
     }
 
-    #[cfg(unix)]
+    // APFS rejects file names that are not UTF-8.
+    #[cfg(target_os = "linux")]
     #[test]
     fn hmmpress_preserves_non_utf8_path_bytes_for_sidecars() {
         use std::os::unix::ffi::{OsStrExt, OsStringExt};

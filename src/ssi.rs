@@ -1023,7 +1023,8 @@ mod tests {
         assert!(err.to_string().contains("nonzero padding"));
     }
 
-    #[cfg(unix)]
+    // APFS rejects file names that are not UTF-8.
+    #[cfg(target_os = "linux")]
     #[test]
     fn write_hmm_ssi_preserves_non_utf8_path_bytes() {
         use std::os::unix::ffi::{OsStrExt, OsStringExt};

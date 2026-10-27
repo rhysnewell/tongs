@@ -1,6 +1,6 @@
 //! SSE-optimized Forward parser (float precision, probability space).
 //! Direct port of impl_sse/fwdback.c forward_engine() in parser mode.
-#![allow(clippy::let_and_return, clippy::needless_borrow)]
+#![allow(clippy::let_and_return, clippy::needless_borrow, clippy::missing_safety_doc)]
 
 #[cfg(striped)]
 use crate::simd::sse::*;

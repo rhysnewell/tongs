@@ -746,6 +746,8 @@ mod tests {
     /// (rf/mm/cons/cs/ca), diverging by one byte just before the
     /// comlog/nseq/ctime region. C keeps array[M+1] == '\0' (p7_hmmfile.c:1560-1562)
     /// and dumps the full M+2 bytes verbatim (p7_hmmfile.c:1037-1041).
+    // The reference C reads probabilities with the host expf, which matches ours only on glibc.
+    #[cfg(target_os = "linux")]
     #[test]
     fn binary_write_matches_c_hmmconvert_byte_for_byte() {
         // Exercise models with CONS/CS/RF/MAP/COMPO and ctime/comlog/nseq fields.
