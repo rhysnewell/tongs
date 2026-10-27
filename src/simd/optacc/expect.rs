@@ -62,10 +62,10 @@ impl Expectation {
         null2.resize(k, 1.0);
         for (x, odds) in rfv.iter().enumerate().take(k) {
             let mut sv = _mm_setzero_ps();
-            for qi in 0..q {
+            for (qi, stripe) in odds.iter().enumerate().take(q) {
                 let m = _mm_loadu_ps(self.m.as_ptr().add(qi * 4));
                 let i = _mm_loadu_ps(self.i.as_ptr().add(qi * 4));
-                sv = _mm_add_ps(sv, _mm_mul_ps(m, _mm_loadu_ps(odds[qi].as_ptr())));
+                sv = _mm_add_ps(sv, _mm_mul_ps(m, _mm_loadu_ps(stripe.as_ptr())));
                 sv = _mm_add_ps(sv, i);
             }
             sv = _mm_add_ps(sv, _mm_shuffle_ps::<0b00_11_10_01>(sv, sv));

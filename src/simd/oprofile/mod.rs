@@ -119,10 +119,6 @@ pub struct OProfile {
     // === Common fields ===
     pub m: usize,
     pub l: i32,
-    /// Upper bound on emitted sequence length (HMM `MAXL`); written as the
-    /// `.h3f` `max_length` field. Mirrors C `om->max_length`, copied from
-    /// `gm->max_length` in `p7_oprofile_Convert` (p7_oprofile.c:1097). `-1`
-    /// when the model has no MAXL line.
     pub max_length: i32,
     pub nj: f32,
     pub mode: i32,
@@ -134,21 +130,10 @@ pub struct OProfile {
     pub abc_kp: usize,
 }
 
-/// Convert a float log-odds score to a biased MSV byte (`u8`).
-///
-/// Matches C `biased_byteify`: `result = (uint8_t)(-round(scale_b * sc)) + bias_b`.
-/// For positive `sc` the negated rounded value is negative; unsigned wrapping
-/// then yields the correct offset byte. Saturates to 255.
 mod convert;
 use convert::*;
 
 impl OProfile {
-    /// Convert a standard `Profile` into the SSE-striped optimized profile.
-    ///
-    /// Ports C `p7_oprofile_Convert()`: runs the MSV (byte), Viterbi (word),
-    /// and Forward/Backward (float) striping conversions in one pass.
-    /// Requires `gm.m <= allocM` and matching alphabet. Sets `mode`, `L`, `M`,
-    /// `nj`, `evparam`, `cutoff`, `compo`, and copies the model name.
     pub fn convert(gm: &Profile) -> Self {
         let m = gm.m;
         let kp = gm.abc_kp;
@@ -219,32 +204,15 @@ impl OProfile {
         om
     }
 
-    /// Set the target sequence length of the MSVFilter part of the model.
-    ///
-    /// Ports `p7_oprofile_ReconfigMSVLength`: recomputes only `tjb_b` for a
-    /// new mean target length `l`. The acceleration pipeline (and nhmmer's
-    /// long-target SSV scan) uses this to defer reconfiguring the rest of the
-    /// length model until after the MSV stage.
     pub fn reconfig_msv_length(&mut self, l: i32) {
         self.tjb_b = unbiased_byteify(self.scale_b, c_logf_to_f32(3.0_f32 / (l as f32 + 3.0)));
     }
 
-    /// Set the target sequence length of the optimized model.
-    ///
-    /// Ports `p7_oprofile_ReconfigLength` (combines MSV + "rest" length
-    /// reconfigs): updates `tjb_b`, N/C/J transition floats `xf` and words
-    /// `xw` for a new mean target length `l`. Does not touch the null model
-    /// (caller must also `p7_bg_SetLength`). Must be fast — sits in the hot
-    /// path, called once per target sequence.
     pub fn reconfig_length(&mut self, l: i32) {
         self.reconfig_msv_length(l);
         self.reconfig_rest_length(l);
     }
 
-    /// Set the target sequence length of the main profile, excluding MSVFilter.
-    ///
-    /// Ports `p7_oprofile_ReconfigRestLength`: updates N/C/J transition floats
-    /// and words for Forward/Viterbi filters without touching `tjb_b`.
     pub fn reconfig_rest_length(&mut self, l: i32) {
         let pmove = (2.0 + self.nj) / (l as f32 + 2.0 + self.nj);
         let ploop = 1.0 - pmove;
@@ -264,13 +232,6 @@ impl OProfile {
         self.l = l;
     }
 
-    /// Reconfigure the optimized profile into multihit mode for target length `l`.
-    ///
-    /// Ports `p7_oprofile_ReconfigMultihit`: sets E->{move,loop}=0.5 and
-    /// `nj=1`, mirroring the unihit/multihit flip done during domain
-    /// definition. Calls `reconfig_length(l)` to refresh the length model.
-    /// Avoids rebuilding through generic log-space scores so low-bit parity
-    /// with the original is preserved.
     pub fn reconfig_multihit(&mut self, l: i32) {
         self.xf[P7O_E][P7O_MOVE] = 0.5;
         self.xf[P7O_E][P7O_LOOP] = 0.5;
@@ -283,11 +244,6 @@ impl OProfile {
         self.reconfig_length(l);
     }
 
-    /// Reconfigure the optimized profile into unihit mode for target length `l`.
-    ///
-    /// Ports `p7_oprofile_ReconfigUnihit`: sets E->move=1, E->loop=0, `nj=0`,
-    /// and refreshes the length model via `reconfig_length(l)`. Used by domain
-    /// definition to score isolated single-domain envelopes.
     pub fn reconfig_unihit(&mut self, l: i32) {
         self.xf[P7O_E][P7O_MOVE] = 1.0;
         self.xf[P7O_E][P7O_LOOP] = 0.0;
@@ -299,14 +255,6 @@ impl OProfile {
         self.reconfig_length(l);
     }
 
-    /// Retrieve Forward (float) residue emission values into a flat array.
-    ///
-    /// Ports `p7_oprofile_GetFwdEmissionArray`: extracts an implicit 2D
-    /// `(M+1) * Kp` table from the striped/interleaved `rfv`, converting back
-    /// to emission values weighted by background. Canonical residues:
-    /// `arr[k * Kp + x] = rfv[x][q][z] * bg.f[x]`. Degenerate / ambiguity
-    /// codes are filled via `esl_abc_FExpectScVec`-style expectation over
-    /// canonical residues weighted by `bg.f`.
     pub fn get_fwd_emissions(
         &self,
         bg: &crate::bg::Bg,
@@ -372,13 +320,6 @@ impl OProfile {
             .copied()
     }
 
-    /// Update the Forward/Backward match emissions for a new bg distribution.
-    ///
-    /// Ports `p7_oprofile_UpdateFwdEmissionScores`: rewrites the striped `rfv`
-    /// (and its aligned mirror `rfv_a`) in place using precomputed raw
-    /// Forward emissions from `get_fwd_emissions`. Reorders the loops over
-    /// `(q, x, z)` to minimize working scratch. Used by nhmmer long_target
-    /// per-envelope reparameterization.
     #[cfg(target_arch = "x86_64")]
     pub fn update_fwd_emission_scores(
         &mut self,

@@ -5,11 +5,6 @@ use tongs::tophits::{Domain, Hit, TopHits};
 
 use super::tables::evalue_from_lnp;
 
-/// Write Pfam-format tabular output (`--pfamtblout`).
-///
-/// Two sections: sequence scores then domain scores, both restricted to
-/// reported hits. Domain rows are re-sorted as C pseudo-hits, using the full
-/// sort-key comparator from `p7_tophits_TabularXfam`.
 pub fn write_pfamtblout<W: Write>(
     f: &mut W,
     _qname: &str,

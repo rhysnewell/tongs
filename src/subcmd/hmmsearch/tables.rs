@@ -4,13 +4,6 @@ use tongs::alphabet::Alphabet;
 use tongs::tophits::{Domain, Hit, TopHits};
 use tongs::util::cmath::c_exp_f64;
 
-/// Write per-sequence tabular output (`--tblout`).
-///
-/// Mirrors the non-long_target branch of C `p7_tophits_TabularTargets`
-/// (`hmmer/src/p7_tophits.c`): a header trio (column widths sized to the
-/// longest target name / accession and the query name / accession,
-/// minimums 20/10/20/10) followed by one row per reported hit with full
-/// sequence and best-domain stats.
 pub fn write_tblout<W: Write>(
     f: &mut W,
     qname: &str,
@@ -167,12 +160,6 @@ pub(super) fn truncate_for_textw(s: &str, width: usize) -> String {
     s.chars().take(width).collect()
 }
 
-/// Write per-domain tabular output (`--domtblout`).
-///
-/// Mirrors C `p7_tophits_TabularDomains` (`hmmer/src/p7_tophits.c`). Emits one
-/// row per reported domain with full-sequence stats plus per-domain c-Evalue,
-/// i-Evalue, score, bias, and hmm/ali/env coordinate triples. Column widths
-/// auto-fit target names and accessions, with 20/10 minimums.
 pub fn write_domtblout<W: Write>(
     f: &mut W,
     qname: &str,
@@ -366,26 +353,6 @@ pub(super) fn normalize_hmmsearch_table_cmdline(cmdline: &str) -> String {
     }
 }
 
-/// Build and write the `-A` multiple alignment of all included domains.
-///
-/// Faithful port of the `-A` block in `hmmer/src/hmmsearch.c:554-572` and
-/// `hmmer/src/phmmer.c:620-638`: it calls `p7_tophits_Alignment(th, abc,
-/// NULL,NULL, 0, p7_ALL_CONSENSUS_COLS, &msa)` to assemble a real
-/// column-aligned MSA of every included domain (sequence names `name/from-to`,
-/// `#=GS DE [subseq from]` lines, `#=GC RF`, `#=GR PP`, all aligned to the model
-/// consensus columns), sets `#=GF ID/AC/DE/AU`, then writes Stockholm
-/// (`textw > 0`) or Pfam (`textw == 0`). Returns the number of sequences in the
-/// MSA when one was produced (so the caller can print the matching
-/// `# Alignment of N hits ... saved to:` line), or `None` if no hits satisfy
-/// the inclusion thresholds.
-///
-/// `name`/`acc`/`desc` are the per-tool GF annotation (hmmsearch: model
-/// name/acc/desc; phmmer: the model/query name plus optional query acc/desc),
-/// and `author` is e.g. `"hmmsearch (HMMER 3.4)"` / `"phmmer (HMMER 3.4)"`.
-///
-/// Reuses the same `tophits::included_alignment` + Stockholm writer that
-/// `jackhmmer` uses. As in C, `textw > 0` writes Stockholm in 200-column
-/// blocks and `--notextw` (`textw == 0`) writes one unwrapped Pfam block.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn write_ali_output<W: Write>(
     f: &mut W,

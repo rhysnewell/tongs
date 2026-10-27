@@ -61,7 +61,7 @@ pub(super) fn write_header(
     if args.show_acc {
         writeln!(out, "# prefer accessions over names:    yes").unwrap();
     }
-    write_hmmsearch_option_header(out, &args, &cmdline);
+    write_hmmsearch_option_header(out, args, cmdline);
     if cpu_was_requested {
         writeln!(out, "# number of worker threads:        {}", args.cpu).unwrap();
     }

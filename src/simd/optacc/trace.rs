@@ -1,14 +1,5 @@
 use super::*;
 
-/// Optimal-accuracy traceback restricted to the (hmmfrom, hmmto, sqfrom, sqto)
-/// coordinate span needed by domtblout.
-///
-/// Uses the same state-selection rules as `oa_trace_pmx` / C `p7_OATrace`
-/// (Kall '05), but avoids materializing and reversing a full `Trace`. Returns
-/// `None` if no model/sequence coordinates were ever entered.
-///
-/// # Safety
-/// Requires SSE2 support and full striped matrices in `pp` and `ox`.
 #[target_feature(enable = "sse2")]
 pub unsafe fn oa_trace_coords_pmx(
     om: &OProfile,
@@ -72,11 +63,9 @@ pub unsafe fn oa_trace_coords_pmx(
                     hmmto = hmmto.max(k);
                 }
             }
-            State::I => {
-                if i > 0 {
-                    sqfrom = sqfrom.min(i);
-                    sqto = sqto.max(i);
-                }
+            State::I if i > 0 => {
+                sqfrom = sqfrom.min(i);
+                sqto = sqto.max(i);
             }
             _ => {}
         }
@@ -99,16 +88,6 @@ pub unsafe fn oa_trace_coords_pmx(
     }
 }
 
-/// Optimal-accuracy decoding: traceback over the striped OA matrix.
-///
-/// Ports C `p7_OATrace()` (Kall '05): walks back from C through the OA matrix
-/// `ox` (filled by `optimal_accuracy_pmx`) and emits a reversed `Trace` of
-/// states + (k, i) coordinates. Posterior-probability per-residue annotation
-/// is not needed for domtblout extraction so it is omitted. Includes a
-/// runaway safety break (`tr.n > L + M + 100`).
-///
-/// # Safety
-/// Requires SSE2 support and full striped matrices in `pp` and `ox`.
 #[target_feature(enable = "sse2")]
 pub unsafe fn oa_trace_pmx(om: &OProfile, pp: &ProbMx, ox: &ProbMx) -> Trace {
     let mut tr = Trace::new();

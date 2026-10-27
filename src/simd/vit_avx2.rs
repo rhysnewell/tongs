@@ -1,3 +1,5 @@
+#![allow(clippy::missing_safety_doc)]
+
 use std::arch::x86_64::*;
 use std::sync::Arc;
 
@@ -147,7 +149,7 @@ pub unsafe fn viterbi_filter(
         }
 
         let xe = hmax(xev);
-        if xe >= i16::MAX {
+        if xe == i16::MAX {
             return VitResult::Overflow;
         }
         xn = add(xn, xw[P7O_N][P7O_LOOP]);

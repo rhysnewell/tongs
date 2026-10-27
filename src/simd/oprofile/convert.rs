@@ -1,3 +1,6 @@
+// The float constants are Cephes literals kept as written in the C source.
+#![allow(clippy::excessive_precision)]
+
 use super::*;
 
 pub(super) fn biased_byteify(scale_b: f32, bias_b: u8, sc: f32) -> u8 {
@@ -35,13 +38,6 @@ pub(super) fn unbiased_byteify(scale_b: f32, sc: f32) -> u8 {
     }
 }
 
-/// Vectorized 4-lane `expf` port of Easel's `esl_sse_expf`, used to lift log
-/// scores into probability space when building the Forward/Backward profile.
-/// Uses the Cephes minimax polynomial; falls back to `f32::INFINITY` / `0.0`
-/// on over/underflow.
-///
-/// # Safety
-/// Requires SSE2 to be available at runtime.
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "sse2")]
 pub(super) unsafe fn esl_sse_expf4(x: [f32; 4]) -> [f32; 4] {

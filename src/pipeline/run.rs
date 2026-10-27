@@ -17,10 +17,6 @@ use super::{
 };
 
 impl Pipeline {
-    /// Run the pipeline on a single sequence.
-    /// Uses SIMD MSV filter for the first stage, then SIMD Viterbi and Forward.
-    /// Reconfigures profile/oprofile length model per sequence (matching C).
-    /// `om` is the SIMD-optimized profile, `hmm` is needed for domain definition.
     pub fn run(
         &mut self,
         gm: &mut Profile,

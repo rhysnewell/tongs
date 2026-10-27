@@ -1,6 +1,7 @@
 //! SSE optimal-accuracy DP over striped posterior matrices.
 //! Direct port of HMMER impl_sse/optacc.c p7_OptimalAccuracy() for the
 //! coordinate-only domain path.
+#![allow(clippy::missing_safety_doc)]
 
 use std::arch::x86_64::*;
 
