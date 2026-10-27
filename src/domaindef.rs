@@ -93,6 +93,7 @@ pub(crate) struct DomainSimdScratch {
     bck_pmx: crate::simd::probmx::ProbMx,
     pp_pmx: crate::simd::probmx::ProbMx,
     oa_pmx: crate::simd::probmx::ProbMx,
+    region_pmx: Option<crate::simd::probmx::ProbMx>,
     null2: Vec<f32>,
     exp_m: Vec<f32>,
     exp_i: Vec<f32>,
@@ -118,6 +119,7 @@ impl DomainSimdScratch {
             bck_pmx: crate::simd::probmx::ProbMx::new_full(0, 0),
             pp_pmx: crate::simd::probmx::ProbMx::new_full(0, 0),
             oa_pmx: crate::simd::probmx::ProbMx::new_full(0, 0),
+            region_pmx: None,
             null2: Vec::new(),
             exp_m: Vec::new(),
             exp_i: Vec::new(),
@@ -451,12 +453,6 @@ fn score_domain_envelope(
     debug_assert!(null_sc.is_finite());
     let env_len = jenv - ienv + 1;
     let l = seq_len; // full sequence length for length correction
-    if std::env::var("NHMMER_DEBUG_IN").is_ok() && long_target && seq_len > 1000 {
-        eprintln!(
-            "score_env INPUT: seq_len={} ienv={} jenv={} env_len={} long_target={}",
-            seq_len, ienv, jenv, env_len, long_target
-        );
-    }
     let null2_is_done = null2_is_done || !do_null2;
     let do_longtarget_length = long_target;
     let do_longtarget_reparam = long_target && do_null2;
@@ -474,15 +470,19 @@ fn score_domain_envelope(
     let mut simd_oasc: Option<f32> = None;
     #[cfg(target_arch = "x86_64")]
     let mut pre_trim_local_bg_f: Option<Vec<f32>> = None;
-    if make_alignment {
-        simd_scratch.pp_gmx.grow_to_zeroed(gm.m, env_len);
-        env_pp_ptr = &mut simd_scratch.pp_gmx;
-    }
-
     #[cfg(target_arch = "x86_64")]
     let use_simd = is_x86_feature_detected!("sse2");
     #[cfg(not(target_arch = "x86_64"))]
     let use_simd = false;
+    // The striped path reads the generic posterior matrix only to display alignments or when it
+    // finds no optimal accuracy trace, so it is cleared only then.
+    let lazy_pp = make_alignment && use_simd && !make_alignment_display;
+    if make_alignment {
+        if !lazy_pp {
+            simd_scratch.pp_gmx.grow_to_zeroed(gm.m, env_len);
+        }
+        env_pp_ptr = &mut simd_scratch.pp_gmx;
+    }
     let dsq_offset = ienv - 1;
     let mut sub_dsq = Vec::new();
     if !use_simd || make_alignment_display {
@@ -809,6 +809,9 @@ fn score_domain_envelope(
         if simd_ad.is_some() {
             simd_ad
         } else {
+            if lazy_pp {
+                simd_scratch.pp_gmx.grow_to_zeroed(gm.m, env_len);
+            }
             let env_pp = unsafe { &*env_pp_ptr };
             {
                 simd_scratch.oa_gmx.grow_to_zeroed(gm.m, env_len);
@@ -1073,7 +1076,7 @@ fn score_domain_envelope(
                     }
                 }
 
-                let (envsc_min, lt_domcorrection, default_fwd_sc) = if do_longtarget_reparam {
+                let (envsc_min, lt_domcorrection, _) = if do_longtarget_reparam {
                     // Default-model Forward on the (possibly trimmed) region.
                     let mut default_om = base_om.clone();
                     default_om.reconfig_rest_length(new_env_len as i32);
@@ -1108,13 +1111,6 @@ fn score_domain_envelope(
                 } else {
                     (env_fwd_sc_current, 0.0, env_fwd_sc_current)
                 };
-                if std::env::var("NHMMER_DEBUG_IN").is_ok() && seq_len > 1000 {
-                    eprintln!(
-                    "  env=[{}..{}] env_len={} iali={} jali={} reparam={:.3} default={:.3} envsc_min={:.3}",
-                    new_ienv, new_jenv, new_env_len, iali, jali,
-                    env_fwd_sc_current, default_fwd_sc, envsc_min
-                );
-                }
                 (
                     envsc_min,
                     lt_domcorrection,
@@ -1479,7 +1475,11 @@ pub(crate) fn define_domains(
                 if let Some(om) = om {
                     let mut region_om = om.clone();
                     region_om.reconfig_multihit(l as i32);
-                    let mut region_pmx = crate::simd::probmx::ProbMx::new_full(gm.m, region_len);
+                    let mut region_pmx = simd_scratch
+                        .region_pmx
+                        .take()
+                        .unwrap_or_else(|| crate::simd::probmx::ProbMx::new_full(gm.m, region_len));
+                    region_pmx.resize_full(gm.m, region_len);
                     unsafe {
                         crate::simd::fwd_filter::forward_parser_pmx_offset_with_scratch(
                             dsq,
@@ -1703,6 +1703,10 @@ pub(crate) fn define_domains(
                     long_target,
                     do_null2,
                 ));
+            }
+            #[cfg(target_arch = "x86_64")]
+            if let Some((_, region_pmx)) = region_trace_pmx {
+                simd_scratch.region_pmx = Some(region_pmx);
             }
         } else {
             // Single-domain region: the region IS the envelope
