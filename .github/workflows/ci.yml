@@ -21,7 +21,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -44,7 +44,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -54,7 +54,7 @@ jobs:
 
       - name: Cache HMMER 3.4 and the pinned Pfam fixtures
         id: hmmer
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: hmmer
           key: hmmer-3.4-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/download_testsuite_fixtures.sh') }}
