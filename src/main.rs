@@ -1,5 +1,3 @@
-//! hmmer-pure-rs — unified CLI for all HMMER tools.
-
 use std::ffi::OsString;
 use std::process::ExitCode;
 
@@ -19,7 +17,7 @@ fn main() -> ExitCode {
 
     let cmd = args[1].to_string_lossy().into_owned();
     // Remove the subcommand from args so clap sees the right argv
-    let sub_args_os: Vec<OsString> = std::iter::once(OsString::from(format!("hmmer {}", cmd)))
+    let sub_args_os: Vec<OsString> = std::iter::once(OsString::from(format!("tongs {}", cmd)))
         .chain(args[2..].iter().cloned())
         .collect();
 
@@ -47,7 +45,7 @@ fn main() -> ExitCode {
             ExitCode::SUCCESS
         }
         "version" | "--version" | "-V" => {
-            println!("hmmer-pure-rs {}", env!("CARGO_PKG_VERSION"));
+            println!("tongs {}", env!("CARGO_PKG_VERSION"));
             ExitCode::SUCCESS
         }
         _ => {
@@ -73,11 +71,11 @@ fn os_args_to_strings(args: Vec<OsString>) -> Vec<String> {
 /// Print the top-level usage banner listing every supported HMMER subcommand.
 fn print_usage() {
     eprintln!(
-        "hmmer-pure-rs {} — biological sequence analysis using profile HMMs",
+        "tongs {}: biological sequence analysis using profile HMMs",
         env!("CARGO_PKG_VERSION")
     );
     eprintln!();
-    eprintln!("Usage: hmmer <command> [options] [args...]");
+    eprintln!("Usage: tongs <command> [options] [args...]");
     eprintln!();
     eprintln!("Search commands:");
     eprintln!("  search      Search HMM(s) against a sequence database");
