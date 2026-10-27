@@ -318,13 +318,13 @@ pub fn write_h3p_record<W: Write>(w: &mut W, hmm: &Hmm, om: &OProfile) -> HmmerR
     write_f32_ne(w, om.ncj_roundoff)?;
 
     for q in 0..8 * q4 {
-        for value in om.tfv[q] {
+        for value in *om.tfv[q] {
             write_f32_ne(w, value)?;
         }
     }
     for x in 0..om.abc_kp {
         for q in 0..q4 {
-            for value in om.rfv[x][q] {
+            for value in *om.rfv[x][q] {
                 write_f32_ne(w, value)?;
             }
         }
@@ -1260,22 +1260,16 @@ pub fn oprofile_from_pressed_records(
     }
 
     let mut offset = 0;
-    let mut tfv = vec![[0.0f32; 4]; 8 * q4];
+    let mut tfv = vec![AlignedF32x4([0.0f32; 4]); 8 * q4];
     for vector in &mut tfv {
-        *vector = read_f32_vec4(&profile.forward_data, &mut offset, ".h3p tfv")?;
+        vector.0 = read_f32_vec4(&profile.forward_data, &mut offset, ".h3p tfv")?;
     }
-    let mut rfv = vec![vec![[0.0f32; 4]; q4]; abc_kp];
+    let mut rfv = vec![vec![AlignedF32x4([0.0f32; 4]); q4]; abc_kp];
     for rows in &mut rfv {
         for vector in rows {
-            *vector = read_f32_vec4(&profile.forward_data, &mut offset, ".h3p rfv")?;
+            vector.0 = read_f32_vec4(&profile.forward_data, &mut offset, ".h3p rfv")?;
         }
     }
-
-    let rfv_a: Vec<Vec<AlignedF32x4>> = rfv
-        .iter()
-        .map(|rows| rows.iter().copied().map(AlignedF32x4::from_array).collect())
-        .collect();
-    let tfv_a: Vec<AlignedF32x4> = tfv.iter().copied().map(AlignedF32x4::from_array).collect();
 
     let ssv = crate::simd::ssv::SsvProfile::new(&sbv, msv.m);
     let om = OProfile {
@@ -1298,8 +1292,6 @@ pub fn oprofile_from_pressed_records(
         ncj_roundoff: profile.ncj_roundoff,
         rfv: std::sync::Arc::new(rfv),
         tfv: std::sync::Arc::new(tfv),
-        rfv_a: std::sync::Arc::new(rfv_a),
-        tfv_a: std::sync::Arc::new(tfv_a),
         xf: profile.xf,
         m: msv.m,
         l: profile.l,

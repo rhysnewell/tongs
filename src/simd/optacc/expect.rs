@@ -41,7 +41,7 @@ impl Expectation {
         &mut self,
         l: usize,
         k: usize,
-        rfv: &[Vec<[f32; 4]>],
+        rfv: &[Vec<AlignedF32x4>],
         null2: &mut Vec<f32>,
     ) {
         if l == 0 {

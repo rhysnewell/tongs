@@ -31,7 +31,7 @@ impl<'a> Fill<'a> {
         let pdp_x = pp.xmx.as_ptr();
         let oxdp = ox.striped_dp.as_mut_ptr().add(ox.striped_dp_offset);
         let oxx = ox.xmx.as_mut_ptr();
-        let tfv = om.tfv_a.as_ptr();
+        let tfv = om.tfv.as_ptr();
         let dd_tfv = tfv.add(7 * q);
         let infv = _mm_set1_ps(f32::NEG_INFINITY);
 

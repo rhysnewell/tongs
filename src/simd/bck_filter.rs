@@ -132,17 +132,17 @@ unsafe fn shifted(v: __m128) -> __m128 {
 
 #[inline(always)]
 unsafe fn tfv(om: &OProfile, qi: usize, tidx: usize) -> __m128 {
-    _mm_load_ps((*om.tfv_a.as_ptr().add(qi * 7 + tidx)).as_ptr())
+    _mm_load_ps((*om.tfv.as_ptr().add(qi * 7 + tidx)).as_ptr())
 }
 
 #[inline(always)]
 unsafe fn tdd(om: &OProfile, q: usize, qi: usize) -> __m128 {
-    _mm_load_ps((*om.tfv_a.as_ptr().add(7 * q + qi)).as_ptr())
+    _mm_load_ps((*om.tfv.as_ptr().add(7 * q + qi)).as_ptr())
 }
 
 #[inline(always)]
 unsafe fn rfv(om: &OProfile, x: usize, qi: usize) -> __m128 {
-    _mm_load_ps((*(*om.rfv_a.as_ptr().add(x)).as_ptr().add(qi)).as_ptr())
+    _mm_load_ps((*(*om.rfv.as_ptr().add(x)).as_ptr().add(qi)).as_ptr())
 }
 
 #[inline(always)]

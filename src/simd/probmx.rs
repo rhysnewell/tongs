@@ -1,7 +1,7 @@
 #![allow(clippy::too_many_arguments)]
 
 use crate::dp::gmx::*;
-use crate::simd::oprofile::nqf;
+use crate::simd::oprofile::{nqf, AlignedF32x4};
 use crate::simd::sse::*;
 
 pub const PXE: usize = 0;
@@ -279,7 +279,7 @@ pub fn p_null2_odds_from_omx_expectation_reuse(
     fwd: &ProbMx,
     bck: &ProbMx,
     k: usize,
-    rfv: &[Vec<[f32; 4]>],
+    rfv: &[Vec<AlignedF32x4>],
     njc_loop: [f32; 3],
     null2: &mut Vec<f32>,
     exp_m: &mut Vec<f32>,

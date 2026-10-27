@@ -76,7 +76,7 @@ struct Striped<'a> {
     cells: &'a [f32],
     xmx: &'a [f32],
     row_scale: &'a [f32],
-    tfv: &'a [[f32; 4]],
+    tfv: &'a [AlignedF32x4],
     xf: &'a [[f32; P7O_NXTRANS]; P7O_NXSTATES],
     m: usize,
 }

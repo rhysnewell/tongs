@@ -51,22 +51,16 @@ pub const P7O_MOVE: usize = 0;
 pub const P7O_LOOP: usize = 1;
 pub const P7O_NXTRANS: usize = 2;
 
-/// 16-byte aligned wrapper around `[f32; 4]` for use with SSE `_mm_load_ps`.
 #[repr(align(16))]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct AlignedF32x4(pub [f32; 4]);
 
-impl AlignedF32x4 {
-    /// Wrap a `[f32; 4]` into an aligned lane container.
-    #[inline]
-    pub fn from_array(v: [f32; 4]) -> Self {
-        Self(v)
-    }
+impl std::ops::Deref for AlignedF32x4 {
+    type Target = [f32; 4];
 
-    /// Return a `*const f32` to the first lane (16-byte aligned).
-    #[inline]
-    pub fn as_ptr(&self) -> *const f32 {
-        self.0.as_ptr()
+    #[inline(always)]
+    fn deref(&self) -> &[f32; 4] {
+        &self.0
     }
 }
 
@@ -102,11 +96,9 @@ pub struct OProfile {
 
     // === Forward/Backward float-precision fields ===
     /// Float-precision emission scores (probability ratios): `rfv[residue][q_vector][4 floats]`
-    pub rfv: Arc<Vec<Vec<[f32; 4]>>>,
+    pub rfv: Arc<Vec<Vec<AlignedF32x4>>>,
     /// Float-precision transition scores: tfv[j][4 floats]
-    pub tfv: Arc<Vec<[f32; 4]>>,
-    pub rfv_a: Arc<Vec<Vec<AlignedF32x4>>>,
-    pub tfv_a: Arc<Vec<AlignedF32x4>>,
+    pub tfv: Arc<Vec<AlignedF32x4>>,
     /// Special state float scores: `xf[state][transition]`
     pub xf: [[f32; P7O_NXTRANS]; P7O_NXSTATES],
 
@@ -137,18 +129,6 @@ impl OProfile {
         let vf = vf_conversion(gm);
         let fb = fb_conversion(gm);
 
-        let rfv_a: Vec<Vec<AlignedF32x4>> = fb
-            .rfv
-            .iter()
-            .map(|rows| rows.iter().copied().map(AlignedF32x4::from_array).collect())
-            .collect();
-        let tfv_a: Vec<AlignedF32x4> = fb
-            .tfv
-            .iter()
-            .copied()
-            .map(AlignedF32x4::from_array)
-            .collect();
-
         let ssv = crate::simd::ssv::SsvProfile::new(&mf.sbv, m);
         let om = OProfile {
             rbv: Arc::new(mf.rbv),
@@ -170,8 +150,6 @@ impl OProfile {
             ncj_roundoff: 0.0,
             rfv: Arc::new(fb.rfv),
             tfv: Arc::new(fb.tfv),
-            rfv_a: Arc::new(rfv_a),
-            tfv_a: Arc::new(tfv_a),
             xf: fb.xf,
             m,
             l: gm.l,
@@ -339,9 +317,7 @@ impl OProfile {
                     sc_arr[2 * kp + x],
                     sc_arr[3 * kp + x],
                 ];
-                let packed = unsafe { esl_sse_expf4(tmp) };
-                Arc::make_mut(&mut self.rfv)[x][q] = packed;
-                Arc::make_mut(&mut self.rfv_a)[x][q] = AlignedF32x4::from_array(packed);
+                Arc::make_mut(&mut self.rfv)[x][q] = AlignedF32x4(unsafe { esl_sse_expf4(tmp) });
             }
 
             // Gap, nonresidue, missing codes — -infinity.
@@ -377,9 +353,7 @@ impl OProfile {
                     sc_arr[2 * kp + x],
                     sc_arr[3 * kp + x],
                 ];
-                let packed = unsafe { esl_sse_expf4(tmp) };
-                Arc::make_mut(&mut self.rfv)[x][q] = packed;
-                Arc::make_mut(&mut self.rfv_a)[x][q] = AlignedF32x4::from_array(packed);
+                Arc::make_mut(&mut self.rfv)[x][q] = AlignedF32x4(unsafe { esl_sse_expf4(tmp) });
             }
         }
     }

@@ -289,8 +289,8 @@ pub(super) fn vf_conversion(gm: &Profile) -> VfConversion {
 }
 
 pub(super) struct FbConversion {
-    pub(super) rfv: Vec<Vec<[f32; 4]>>,
-    pub(super) tfv: Vec<[f32; 4]>,
+    pub(super) rfv: Vec<Vec<AlignedF32x4>>,
+    pub(super) tfv: Vec<AlignedF32x4>,
     pub(super) xf: [[f32; P7O_NXTRANS]; P7O_NXSTATES],
 }
 
@@ -299,7 +299,7 @@ pub(super) fn fb_conversion(gm: &Profile) -> FbConversion {
     let m = gm.m;
     let kp = gm.abc_kp;
     let nqf = nqf(m);
-    let mut rfv = vec![vec![[0.0f32; 4]; nqf]; kp];
+    let mut rfv = vec![vec![AlignedF32x4([0.0f32; 4]); nqf]; kp];
     for x in 0..kp {
         for q in 0..nqf {
             let mut tmp = [0.0f32; 4];
@@ -311,13 +311,11 @@ pub(super) fn fb_conversion(gm: &Profile) -> FbConversion {
                     f32::NEG_INFINITY
                 };
             }
-            {
-                rfv[x][q] = unsafe { esl_sse_expf4(tmp) };
-            }
+            rfv[x][q] = AlignedF32x4(unsafe { esl_sse_expf4(tmp) });
         }
     }
 
-    let mut tfv = vec![[0.0f32; 4]; 8 * nqf];
+    let mut tfv = vec![AlignedF32x4([0.0f32; 4]); 8 * nqf];
     let mut j = 0;
     for q in 0..nqf {
         let k = q + 1;
@@ -340,9 +338,7 @@ pub(super) fn fb_conversion(gm: &Profile) -> FbConversion {
                     f32::NEG_INFINITY
                 };
             }
-            {
-                tfv[j] = unsafe { esl_sse_expf4(tmp) };
-            }
+            tfv[j] = AlignedF32x4(unsafe { esl_sse_expf4(tmp) });
             j += 1;
         }
     }
@@ -357,9 +353,7 @@ pub(super) fn fb_conversion(gm: &Profile) -> FbConversion {
                 f32::NEG_INFINITY
             };
         }
-        {
-            tfv[j] = unsafe { esl_sse_expf4(tmp) };
-        }
+        tfv[j] = AlignedF32x4(unsafe { esl_sse_expf4(tmp) });
         j += 1;
     }
 

@@ -132,8 +132,8 @@ pub unsafe fn forward_parser_pmx_offset(
 unsafe fn row<const N: usize>(om: &OProfile, lanes: [&mut Forward; N], i: usize) {
     let q_count = nqf(om.m);
     let zerov = _mm_setzero_ps();
-    let rfv_ptr = om.rfv_a.as_ptr();
-    let tfv_ptr = om.tfv_a.as_ptr();
+    let rfv_ptr = om.rfv.as_ptr();
+    let tfv_ptr = om.tfv.as_ptr();
     let mut prev = [std::ptr::null::<__m128>(); N];
     let mut cur = [std::ptr::null_mut::<__m128>(); N];
     let mut rsc = [std::ptr::null::<AlignedF32x4>(); N];
