@@ -30,19 +30,32 @@ impl Pipeline {
         sq: &Sequence,
         th: &mut TopHits,
     ) -> bool {
+        if sq.n == 0 {
+            return false;
+        }
+        reconfig_length(gm, sq.n as i32);
+        om.reconfig_length(sq.n as i32);
+        let null_sc = bg.null_one(sq.n);
+        self.run_configured(gm, om, bg, hmm, sq, null_sc, th)
+    }
+
+    // The caller has already set every length-dependent term for this sequence.
+    #[allow(clippy::too_many_arguments)]
+    pub fn run_configured(
+        &mut self,
+        gm: &Profile,
+        om: &OProfile,
+        bg: &Bg,
+        hmm: &crate::hmm::Hmm,
+        sq: &Sequence,
+        null_sc: f32,
+        th: &mut TopHits,
+    ) -> bool {
         let l = sq.n;
         if l == 0 {
             return false;
         }
-
         self.n_targets += 1;
-
-        // Reconfigure length model for this sequence (matching C's p7_Pipeline)
-        reconfig_length(gm, l as i32);
-        om.reconfig_length(l as i32);
-
-        // Null model score
-        let null_sc = bg.null_one(l);
 
         // C HMMER runs the bias filter only after MSV passes; keep it lazy.
         let mut filtersc = null_sc;

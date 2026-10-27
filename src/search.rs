@@ -5,9 +5,9 @@ use rayon::prelude::*;
 use crate::bg::Bg;
 use crate::hmm::Hmm;
 use crate::pipeline::Pipeline;
-use crate::profile::Profile;
+use crate::profile::{reconfig_length, Profile, P7P_NXSTATES, P7P_NXTRANS};
 use crate::sequence::Sequence;
-use crate::simd::oprofile::OProfile;
+use crate::simd::oprofile::{OProfile, P7O_NXSTATES, P7O_NXTRANS};
 use crate::tophits::{Hit, TopHits};
 use crate::util::simd_env::FlushToZero;
 
@@ -38,6 +38,51 @@ impl Scan {
     }
 }
 
+// Every length-dependent term a target sets, kept so a later target of the same length skips the
+// logarithms behind them.
+#[derive(Clone, Copy)]
+struct Lengthed {
+    l: usize,
+    xsc: [[f32; P7P_NXTRANS]; P7P_NXSTATES],
+    tjb_b: u8,
+    xw: [[i16; P7O_NXTRANS]; P7O_NXSTATES],
+    xf: [[f32; P7O_NXTRANS]; P7O_NXSTATES],
+    p1: f32,
+    fhmm: [f32; 3],
+    null_sc: f32,
+}
+
+impl Lengthed {
+    fn set(l: usize, gm: &mut Profile, om: &mut OProfile, bg: &mut Bg) -> Self {
+        bg.set_length(l);
+        reconfig_length(gm, l as i32);
+        om.reconfig_length(l as i32);
+        Lengthed {
+            l,
+            xsc: gm.xsc,
+            tjb_b: om.tjb_b,
+            xw: om.xw,
+            xf: om.xf,
+            p1: bg.p1,
+            fhmm: bg.fhmm_t[0],
+            null_sc: bg.null_one(l),
+        }
+    }
+
+    fn restore(&self, gm: &mut Profile, om: &mut OProfile, bg: &mut Bg) {
+        gm.xsc = self.xsc;
+        gm.l = self.l as i32;
+        om.tjb_b = self.tjb_b;
+        om.xw = self.xw;
+        om.xf = self.xf;
+        om.l = self.l as i32;
+        bg.p1 = self.p1;
+        bg.fhmm_t[0] = self.fhmm;
+    }
+}
+
+const LENGTH_SLOTS: usize = 1024;
+
 impl Query<'_> {
     pub fn scan(&self, targets: &[Sequence], first: u64) -> Scan {
         let _mode = FlushToZero::enter();
@@ -47,10 +92,24 @@ impl Query<'_> {
         let mut bg = self.bg.clone();
         let mut hits = Vec::new();
         let mut found = TopHits::new();
+        let mut lengths: Vec<Option<Lengthed>> = vec![None; LENGTH_SLOTS];
         for (index, sq) in (first..).zip(targets) {
             pli.n_targets = index;
-            bg.set_length(sq.n);
-            if pli.run(&mut gm, &mut om, &bg, self.hmm, sq, &mut found) {
+            if sq.n == 0 {
+                continue;
+            }
+            let slot = &mut lengths[sq.n % LENGTH_SLOTS];
+            let null_sc = match slot {
+                Some(kept) if kept.l == sq.n => {
+                    kept.restore(&mut gm, &mut om, &mut bg);
+                    kept.null_sc
+                }
+                _ => {
+                    slot.insert(Lengthed::set(sq.n, &mut gm, &mut om, &mut bg))
+                        .null_sc
+                }
+            };
+            if pli.run_configured(&gm, &om, &bg, self.hmm, sq, null_sc, &mut found) {
                 hits.append(&mut found.hits);
             }
             found.hits.clear();
