@@ -240,25 +240,38 @@ mod tests {
         let gen_null2 = null2_by_expectation(&gm, &pp, 1, l);
         let gen_correction = null2_score(&gen_null2, &dsq, 1, l);
 
-        // SIMD null2
         use crate::simd::oprofile::{OProfile, P7O_C, P7O_J, P7O_LOOP, P7O_N};
-        use crate::simd::probmx::{p_null2_from_pmx, ProbMx};
+        use crate::simd::probmx::{p_null2_odds_from_omx_expectation_reuse, ProbMx};
         let om = OProfile::convert(&gm);
         let mut fwd_pmx = ProbMx::new_full(gm.m, l);
-        let fwd_sc =
-            unsafe { crate::simd::fwd_filter::forward_parser_pmx(&dsq, l, &om, &mut fwd_pmx) };
         let mut bck_pmx = ProbMx::new_full(gm.m, l);
         unsafe {
-            crate::simd::bck_filter::backward_parser_pmx(&dsq, l, &om, fwd_sc, &mut bck_pmx);
+            crate::simd::fwd_filter::forward_parser_pmx(&dsq, l, &om, &mut fwd_pmx);
+            crate::simd::bck_filter::backward_parser_pmx(
+                &dsq,
+                l,
+                &om,
+                Some(&fwd_pmx.row_scale),
+                &mut bck_pmx,
+            );
         };
         let njc_loop = [
             om.xf[P7O_N][P7O_LOOP],
             om.xf[P7O_J][P7O_LOOP],
             om.xf[P7O_C][P7O_LOOP],
         ];
-        let simd_correction = p_null2_from_pmx(
-            &fwd_pmx, &bck_pmx, gm.m, gm.abc_k, &dsq, 1, l, &gm.rsc, njc_loop,
+        let mut simd_null2 = Vec::new();
+        p_null2_odds_from_omx_expectation_reuse(
+            &fwd_pmx,
+            &bck_pmx,
+            gm.abc_k,
+            &om.rfv,
+            njc_loop,
+            &mut simd_null2,
+            &mut Vec::new(),
+            &mut Vec::new(),
         );
+        let simd_correction = null2_score(&simd_null2, &dsq, 1, l);
 
         // Should be close (not exact due to log-space vs probability-space)
         let diff = (gen_correction - simd_correction).abs();

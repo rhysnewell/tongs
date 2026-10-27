@@ -26,7 +26,7 @@ impl<'a> Decoding<'a> {
     ) -> Self {
         let l = fwd.l;
         let m = om.m;
-        pp.resize_parser(l);
+        pp.resize_parser(m, l);
 
         let q = fwd.q_count();
         let row_width = fwd.striped_row_width();

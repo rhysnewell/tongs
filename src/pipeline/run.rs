@@ -202,30 +202,18 @@ impl Pipeline {
 
     pub(crate) fn forward(&mut self, gm: &Profile, om: &OProfile, sq: &Sequence) -> f32 {
         #[cfg(striped)]
-        let _ = gm;
-        let l = sq.n;
-        // Stage 3: full Forward parser.
-        let fwd_sc;
-        #[cfg(striped)]
         {
-            self.fwd_pmx.resize_parser(l);
-            fwd_sc = unsafe {
-                crate::simd::fwd_filter::forward_parser_pmx_offset_with_scratch(
-                    &sq.dsq,
-                    0,
-                    l,
-                    om,
-                    &mut self.fwd_pmx,
-                    &mut self.fwd_dp,
-                )
-            };
+            let _ = gm;
+            self.fwd_pmx.resize_parser(om.m, sq.n);
+            unsafe {
+                crate::simd::fwd_filter::forward_parser_pmx(&sq.dsq, sq.n, om, &mut self.fwd_pmx)
+            }
         }
         #[cfg(not(striped))]
         {
-            let mut gx = Gmx::new(gm.m, l);
-            fwd_sc = crate::dp::generic_fwdback::g_forward(&sq.dsq, l, gm, &mut gx);
+            let mut gx = Gmx::new(gm.m, sq.n);
+            crate::dp::generic_fwdback::g_forward(&sq.dsq, sq.n, gm, &mut gx)
         }
-        fwd_sc
     }
 
     // Two filter survivors share one Forward pass, each under its own length model. The first's
@@ -237,12 +225,14 @@ impl Pipeline {
         first: (&Sequence, [[f32; P7O_NXTRANS]; P7O_NXSTATES]),
         second: (&Sequence, [[f32; P7O_NXTRANS]; P7O_NXSTATES]),
     ) -> (f32, f32) {
-        use crate::simd::fwd_pair::{forward_parser_pair, Parse};
+        use crate::simd::fwd_filter::{forward_pair, Forward};
         let (a, a_xf) = first;
         let (b, b_xf) = second;
-        let mut a = Parse::new(&a.dsq, a.n, a_xf, &mut self.fwd_pmx, &mut self.fwd_dp);
-        let mut b = Parse::new(&b.dsq, b.n, b_xf, &mut self.pair_pmx, &mut self.pair_dp);
-        unsafe { forward_parser_pair(om, &mut a, &mut b) }
+        self.fwd_pmx.resize_parser(om.m, a.n);
+        self.pair_pmx.resize_parser(om.m, b.n);
+        let mut a = Forward::new(&a.dsq, 0, a.n, a_xf, &mut self.fwd_pmx);
+        let mut b = Forward::new(&b.dsq, 0, b.n, b_xf, &mut self.pair_pmx);
+        unsafe { forward_pair(om, &mut a, &mut b) }
     }
 
     #[cfg(striped)]
@@ -252,23 +242,24 @@ impl Pipeline {
         first: (&Sequence, [[f32; P7O_NXTRANS]; P7O_NXSTATES]),
         second: (&Sequence, [[f32; P7O_NXTRANS]; P7O_NXSTATES]),
     ) {
-        use crate::simd::bck_pair::{backward_parser_pair, BackParse};
+        use crate::simd::bck_filter::{backward_pair, Backward};
         let (a, a_xf) = first;
         let (b, b_xf) = second;
-        let (pmx, prev, cur) = self.domain_scratch.backward_parts();
-        let mut a = BackParse::new(&a.dsq, a.n, a_xf, &self.fwd_pmx.row_scale, pmx, prev, cur);
+        let pmx = self.domain_scratch.backward_parts();
+        pmx.resize_parser(om.m, a.n);
+        let mut a = Backward::new(&a.dsq, 0, a.n, a_xf, Some(&self.fwd_pmx.row_scale), pmx);
         let pair = &mut self.pair_bck;
         pair.ready = true;
-        let mut b = BackParse::new(
+        pair.pmx.resize_parser(om.m, b.n);
+        let mut b = Backward::new(
             &b.dsq,
+            0,
             b.n,
             b_xf,
-            &self.pair_pmx.row_scale,
+            Some(&self.pair_pmx.row_scale),
             &mut pair.pmx,
-            &mut pair.prev,
-            &mut pair.cur,
         );
-        unsafe { backward_parser_pair(om, &mut a, &mut b) }
+        unsafe { backward_pair(om, &mut a, &mut b) }
     }
 
     #[cfg(striped)]

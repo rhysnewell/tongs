@@ -86,11 +86,7 @@ pub struct Pipeline {
     #[cfg(all(striped, not(target_arch = "x86_64")))]
     vit_dp: Vec<crate::simd::sse::__m128i>,
     #[cfg(striped)]
-    fwd_dp: Vec<crate::simd::sse::__m128>,
-    #[cfg(striped)]
     fwd_pmx: crate::simd::probmx::ProbMx,
-    #[cfg(striped)]
-    pair_dp: Vec<crate::simd::sse::__m128>,
     #[cfg(striped)]
     pair_pmx: crate::simd::probmx::ProbMx,
     #[cfg(striped)]
@@ -100,23 +96,10 @@ pub struct Pipeline {
 }
 
 #[cfg(striped)]
+#[derive(Default)]
 pub(crate) struct PairBackward {
     pmx: crate::simd::probmx::ProbMx,
-    prev: Vec<crate::simd::sse::__m128>,
-    cur: Vec<crate::simd::sse::__m128>,
     ready: bool,
-}
-
-#[cfg(striped)]
-impl Default for PairBackward {
-    fn default() -> Self {
-        PairBackward {
-            pmx: crate::simd::probmx::ProbMx::new(0),
-            prev: Vec::new(),
-            cur: Vec::new(),
-            ready: false,
-        }
-    }
 }
 
 impl Pipeline {
@@ -164,13 +147,9 @@ impl Pipeline {
             #[cfg(striped)]
             vit_dp: Vec::new(),
             #[cfg(striped)]
-            fwd_dp: Vec::new(),
+            fwd_pmx: Default::default(),
             #[cfg(striped)]
-            fwd_pmx: crate::simd::probmx::ProbMx::new(0),
-            #[cfg(striped)]
-            pair_dp: Vec::new(),
-            #[cfg(striped)]
-            pair_pmx: crate::simd::probmx::ProbMx::new(0),
+            pair_pmx: Default::default(),
             #[cfg(striped)]
             pair_bck: PairBackward::default(),
             #[cfg(striped)]
@@ -197,13 +176,9 @@ impl Pipeline {
             #[cfg(striped)]
             vit_dp: Vec::new(),
             #[cfg(striped)]
-            fwd_dp: Vec::new(),
+            fwd_pmx: Default::default(),
             #[cfg(striped)]
-            fwd_pmx: crate::simd::probmx::ProbMx::new(0),
-            #[cfg(striped)]
-            pair_dp: Vec::new(),
-            #[cfg(striped)]
-            pair_pmx: crate::simd::probmx::ProbMx::new(0),
+            pair_pmx: Default::default(),
             #[cfg(striped)]
             pair_bck: PairBackward::default(),
             #[cfg(striped)]
