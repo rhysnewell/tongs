@@ -114,26 +114,55 @@ impl<'a> Query<'a> {
         let mut hits = Vec::new();
         let mut found = TopHits::new();
         let mut lengths: Vec<Option<Lengthed>> = vec![None; LENGTH_SLOTS];
+        let mut held: Option<Held> = None;
         for (index, sq) in (first..).zip(targets) {
             pli.n_targets = index;
             if sq.n == 0 {
                 continue;
             }
             let slot = &mut lengths[sq.n % LENGTH_SLOTS];
-            let null_sc = match slot {
+            let kept = match slot {
                 Some(kept) if kept.l == sq.n => {
                     kept.restore(&mut gm, &mut om, &mut bg);
-                    kept.null_sc
+                    *kept
                 }
-                _ => {
-                    slot.insert(Lengthed::set(sq.n, &mut gm, &mut om, &mut bg))
-                        .null_sc
-                }
+                _ => *slot.insert(Lengthed::set(sq.n, &mut gm, &mut om, &mut bg)),
             };
-            if pli.run_configured(&gm, &om, &bg, self.hmm, sq, null_sc, &mut found) {
-                hits.append(&mut found.hits);
+            #[cfg(not(striped))]
+            pli.run_configured(&gm, &om, &bg, self.hmm, sq, kept.null_sc, &mut found);
+            #[cfg(striped)]
+            {
+                let Some(filtersc) = pli.filters(&gm, &om, &bg, sq, kept.null_sc) else {
+                    continue;
+                };
+                let this = Held {
+                    sq,
+                    kept,
+                    filtersc,
+                    counted: pli.n_targets,
+                };
+                let Some(partner) = held.take() else {
+                    held = Some(this);
+                    continue;
+                };
+                let (partner_sc, this_sc) =
+                    pli.forward_pair(&om, (partner.sq, partner.kept.xf), (sq, kept.xf));
+                if pli.passes_forward(partner_sc, partner.filtersc)
+                    && pli.passes_forward(this_sc, filtersc)
+                {
+                    pli.backward_pair(&om, (partner.sq, partner.kept.xf), (sq, kept.xf));
+                }
+                self.finish(&mut pli, &mut gm, &mut om, &mut bg, &partner, partner_sc, &mut found);
+                pli.take_partner();
+                self.finish(&mut pli, &mut gm, &mut om, &mut bg, &this, this_sc, &mut found);
             }
-            found.hits.clear();
+            hits.append(&mut found.hits);
+        }
+        if let Some(last) = held {
+            last.kept.restore(&mut gm, &mut om, &mut bg);
+            let sc = pli.forward(&gm, &om, last.sq);
+            self.finish(&mut pli, &mut gm, &mut om, &mut bg, &last, sc, &mut found);
+            hits.append(&mut found.hits);
         }
         Scan {
             hits,
@@ -143,6 +172,32 @@ impl<'a> Query<'a> {
             n_past_fwd: pli.n_past_fwd,
         }
     }
+
+    // A held target is finished under its own length model and target count, as if it ran alone.
+    #[allow(clippy::too_many_arguments)]
+    fn finish(
+        &self,
+        pli: &mut Pipeline,
+        gm: &mut Profile,
+        om: &mut OProfile,
+        bg: &mut Bg,
+        held: &Held,
+        fwd_sc: f32,
+        found: &mut TopHits,
+    ) {
+        let counted = pli.n_targets;
+        pli.n_targets = held.counted;
+        held.kept.restore(gm, om, bg);
+        pli.after_forward(gm, om, bg, self.hmm, held.sq, held.kept.null_sc, held.filtersc, fwd_sc, found);
+        pli.n_targets = counted.max(held.counted);
+    }
+}
+
+struct Held<'t> {
+    sq: &'t Sequence,
+    kept: Lengthed,
+    filtersc: f32,
+    counted: u64,
 }
 
 // Each query scans its own slices of the block, so a large set of models parallelises over models

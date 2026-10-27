@@ -90,7 +90,33 @@ pub struct Pipeline {
     #[cfg(striped)]
     fwd_pmx: crate::simd::probmx::ProbMx,
     #[cfg(striped)]
+    pair_dp: Vec<crate::simd::sse::__m128>,
+    #[cfg(striped)]
+    pair_pmx: crate::simd::probmx::ProbMx,
+    #[cfg(striped)]
+    pair_bck: PairBackward,
+    #[cfg(striped)]
     domain_scratch: crate::domaindef::DomainSimdScratch,
+}
+
+#[cfg(striped)]
+pub(crate) struct PairBackward {
+    pmx: crate::simd::probmx::ProbMx,
+    prev: Vec<crate::simd::sse::__m128>,
+    cur: Vec<crate::simd::sse::__m128>,
+    ready: bool,
+}
+
+#[cfg(striped)]
+impl Default for PairBackward {
+    fn default() -> Self {
+        PairBackward {
+            pmx: crate::simd::probmx::ProbMx::new(0),
+            prev: Vec::new(),
+            cur: Vec::new(),
+            ready: false,
+        }
+    }
 }
 
 impl Pipeline {
@@ -142,6 +168,12 @@ impl Pipeline {
             #[cfg(striped)]
             fwd_pmx: crate::simd::probmx::ProbMx::new(0),
             #[cfg(striped)]
+            pair_dp: Vec::new(),
+            #[cfg(striped)]
+            pair_pmx: crate::simd::probmx::ProbMx::new(0),
+            #[cfg(striped)]
+            pair_bck: PairBackward::default(),
+            #[cfg(striped)]
             domain_scratch: crate::domaindef::DomainSimdScratch::new(),
         }
     }
@@ -168,6 +200,12 @@ impl Pipeline {
             fwd_dp: Vec::new(),
             #[cfg(striped)]
             fwd_pmx: crate::simd::probmx::ProbMx::new(0),
+            #[cfg(striped)]
+            pair_dp: Vec::new(),
+            #[cfg(striped)]
+            pair_pmx: crate::simd::probmx::ProbMx::new(0),
+            #[cfg(striped)]
+            pair_bck: PairBackward::default(),
             #[cfg(striped)]
             domain_scratch: crate::domaindef::DomainSimdScratch::new(),
             ..*self

@@ -6,6 +6,8 @@ use crate::sequence::Sequence;
 #[cfg(striped)]
 use crate::simd::msv_filter::MsvResult;
 use crate::simd::oprofile::OProfile;
+#[cfg(striped)]
+use crate::simd::oprofile::{P7O_NXSTATES, P7O_NXTRANS};
 #[cfg(target_arch = "x86_64")]
 use crate::simd::vit_filter::p7_viterbi_filter;
 #[cfg(striped)]
@@ -50,9 +52,26 @@ impl Pipeline {
         null_sc: f32,
         th: &mut TopHits,
     ) -> bool {
+        let Some(filtersc) = self.filters(gm, om, bg, sq, null_sc) else {
+            return false;
+        };
+        let fwd_sc = self.forward(gm, om, sq);
+        self.after_forward(gm, om, bg, hmm, sq, null_sc, filtersc, fwd_sc, th)
+    }
+
+    pub(crate) fn filters(
+        &mut self,
+        gm: &Profile,
+        om: &OProfile,
+        bg: &Bg,
+        sq: &Sequence,
+        null_sc: f32,
+    ) -> Option<f32> {
+        #[cfg(striped)]
+        let _ = gm;
         let l = sq.n;
         if l == 0 {
-            return false;
+            return None;
         }
         self.n_targets += 1;
 
@@ -91,7 +110,7 @@ impl Pipeline {
             if usc != f32::INFINITY {
                 let msv_pval = msv_pvalue(usc, null_sc, &self.evparam);
                 if msv_pval > self.f1 {
-                    return false;
+                    return None;
                 }
                 filter_p = msv_pval;
             }
@@ -102,7 +121,7 @@ impl Pipeline {
                 filtersc = bg.filter_score(&sq.dsq, l);
                 let bias_pval = msv_pvalue(usc, filtersc, &self.evparam);
                 if bias_pval > self.f1 {
-                    return false;
+                    return None;
                 }
                 filter_p = bias_pval;
             }
@@ -149,7 +168,7 @@ impl Pipeline {
                 if vit_sc != f32::INFINITY {
                     let vit_pval = viterbi_pvalue(vit_sc, filtersc, &self.evparam);
                     if vit_pval > self.f2 {
-                        return false;
+                        return None;
                     }
                 }
             }
@@ -178,11 +197,15 @@ impl Pipeline {
             };
             filtersc = null_sc + bias_delta * scale;
         }
+        Some(filtersc)
+    }
 
+    pub(crate) fn forward(&mut self, gm: &Profile, om: &OProfile, sq: &Sequence) -> f32 {
+        #[cfg(striped)]
+        let _ = gm;
+        let l = sq.n;
         // Stage 3: full Forward parser.
         let fwd_sc;
-        #[cfg(striped)]
-        let fwd_pmx_for_domains;
         #[cfg(striped)]
         {
             self.fwd_pmx.resize_parser(l);
@@ -196,16 +219,87 @@ impl Pipeline {
                     &mut self.fwd_dp,
                 )
             };
-            fwd_pmx_for_domains = Some(&self.fwd_pmx);
         }
         #[cfg(not(striped))]
         {
             let mut gx = Gmx::new(gm.m, l);
             fwd_sc = crate::dp::generic_fwdback::g_forward(&sq.dsq, l, gm, &mut gx);
         }
+        fwd_sc
+    }
 
-        let fwd_pval = forward_pvalue(fwd_sc, filtersc, &self.evparam);
-        if !self.do_max && fwd_pval > self.f3 {
+    // Two filter survivors share one Forward pass, each under its own length model. The first's
+    // matrix is left where the rest of the pipeline reads it, and `take_partner` swaps the second in.
+    #[cfg(striped)]
+    pub(crate) fn forward_pair(
+        &mut self,
+        om: &OProfile,
+        first: (&Sequence, [[f32; P7O_NXTRANS]; P7O_NXSTATES]),
+        second: (&Sequence, [[f32; P7O_NXTRANS]; P7O_NXSTATES]),
+    ) -> (f32, f32) {
+        use crate::simd::fwd_pair::{forward_parser_pair, Parse};
+        let (a, a_xf) = first;
+        let (b, b_xf) = second;
+        let mut a = Parse::new(&a.dsq, a.n, a_xf, om, &mut self.fwd_pmx, &mut self.fwd_dp);
+        let mut b = Parse::new(&b.dsq, b.n, b_xf, om, &mut self.pair_pmx, &mut self.pair_dp);
+        unsafe { forward_parser_pair(om, &mut a, &mut b) }
+    }
+
+    #[cfg(striped)]
+    pub(crate) fn backward_pair(
+        &mut self,
+        om: &OProfile,
+        first: (&Sequence, [[f32; P7O_NXTRANS]; P7O_NXSTATES]),
+        second: (&Sequence, [[f32; P7O_NXTRANS]; P7O_NXSTATES]),
+    ) {
+        use crate::simd::bck_pair::{backward_parser_pair, BackParse};
+        let (a, a_xf) = first;
+        let (b, b_xf) = second;
+        let (pmx, prev, cur) = self.domain_scratch.backward_parts();
+        let mut a = BackParse::new(&a.dsq, a.n, a_xf, &self.fwd_pmx.row_scale, pmx, prev, cur);
+        let pair = &mut self.pair_bck;
+        pair.ready = true;
+        let mut b = BackParse::new(
+            &b.dsq,
+            b.n,
+            b_xf,
+            &self.pair_pmx.row_scale,
+            &mut pair.pmx,
+            &mut pair.prev,
+            &mut pair.cur,
+        );
+        unsafe { backward_parser_pair(om, &mut a, &mut b) }
+    }
+
+    #[cfg(striped)]
+    pub(crate) fn take_partner(&mut self) {
+        std::mem::swap(&mut self.fwd_pmx, &mut self.pair_pmx);
+        let pair = &mut self.pair_bck;
+        self.domain_scratch.trade_backward(&mut pair.pmx, &mut pair.ready);
+    }
+
+    pub(crate) fn passes_forward(&self, fwd_sc: f32, filtersc: f32) -> bool {
+        let pval = forward_pvalue(fwd_sc, filtersc, &self.evparam);
+        self.do_max || pval <= self.f3 || pval.is_nan()
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn after_forward(
+        &mut self,
+        gm: &Profile,
+        om: &OProfile,
+        bg: &Bg,
+        hmm: &crate::hmm::Hmm,
+        sq: &Sequence,
+        null_sc: f32,
+        filtersc: f32,
+        fwd_sc: f32,
+        th: &mut TopHits,
+    ) -> bool {
+        let l = sq.n;
+        #[cfg(striped)]
+        let fwd_pmx_for_domains = Some(&self.fwd_pmx);
+        if !self.passes_forward(fwd_sc, filtersc) {
             return false;
         }
         self.n_past_fwd += 1;

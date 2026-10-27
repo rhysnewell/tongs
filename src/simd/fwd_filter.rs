@@ -699,7 +699,7 @@ fn canonical_run(dsq: &[Dsq], dsq_offset: usize, l: usize, abc_kp: usize) -> boo
 /// Right-shift a __m128 by one float element, zero-filling from the left.
 /// [a, b, c, d] -> [0, a, b, c]
 #[cfg(striped)]
-unsafe fn rightshift_float(v: __m128) -> __m128 {
+pub(crate) unsafe fn rightshift_float(v: __m128) -> __m128 {
     // Cast to integer, shift left by 4 bytes, cast back
     let vi = _mm_castps_si128(v);
     let shifted = _mm_slli_si128::<4>(vi);

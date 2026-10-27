@@ -106,10 +106,32 @@ pub(crate) struct DomainSimdScratch {
     btot: Vec<f32>,
     etot: Vec<f32>,
     mocc: Vec<f32>,
+    backward_ready: bool,
 }
 
 #[cfg(striped)]
 impl DomainSimdScratch {
+    // The pipeline fills the parser Backward itself when two targets share the pass.
+    pub(crate) fn backward_parts(
+        &mut self,
+    ) -> (
+        &mut crate::simd::probmx::ProbMx,
+        &mut Vec<crate::simd::sse::__m128>,
+        &mut Vec<crate::simd::sse::__m128>,
+    ) {
+        self.backward_ready = true;
+        (&mut self.bck_pmx, &mut self.bck_prev, &mut self.bck_cur)
+    }
+
+    pub(crate) fn trade_backward(
+        &mut self,
+        pmx: &mut crate::simd::probmx::ProbMx,
+        ready: &mut bool,
+    ) {
+        std::mem::swap(&mut self.bck_pmx, pmx);
+        std::mem::swap(&mut self.backward_ready, ready);
+    }
+
     /// Allocate an empty SIMD scratch bundle (matrices/buffers grow on first use).
     /// Reused across sequences to amortize allocations.
     pub(crate) fn new() -> Self {
@@ -134,6 +156,7 @@ impl DomainSimdScratch {
             btot: Vec::new(),
             etot: Vec::new(),
             mocc: Vec::new(),
+            backward_ready: false,
         }
     }
 }
@@ -1337,21 +1360,23 @@ pub(crate) fn define_domains(
                     let fwd_pmx_ref = fwd_pmx_storage.insert(fwd_pmx);
                     (&*fwd_pmx_ref, fwd_sc)
                 };
-            simd_scratch.bck_pmx.resize_parser(l);
+            if !std::mem::take(&mut simd_scratch.backward_ready) {
+                simd_scratch.bck_pmx.resize_parser(l);
+                unsafe {
+                    crate::simd::bck_filter::backward_parser_pmx_offset_with_scratch(
+                        dsq,
+                        0,
+                        l,
+                        om,
+                        fwd_sc,
+                        &mut simd_scratch.bck_pmx,
+                        Some(&fwd_pmx_ref.row_scale),
+                        &mut simd_scratch.bck_prev,
+                        &mut simd_scratch.bck_cur,
+                    );
+                };
+            }
             let bck_pmx = &mut simd_scratch.bck_pmx;
-            unsafe {
-                crate::simd::bck_filter::backward_parser_pmx_offset_with_scratch(
-                    dsq,
-                    0,
-                    l,
-                    om,
-                    fwd_sc,
-                    bck_pmx,
-                    Some(&fwd_pmx_ref.row_scale),
-                    &mut simd_scratch.bck_prev,
-                    &mut simd_scratch.bck_cur,
-                );
-            };
             let njc_loop = [
                 om.xf[P7O_N][P7O_LOOP],
                 om.xf[P7O_J][P7O_LOOP],

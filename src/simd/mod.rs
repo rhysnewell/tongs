@@ -4,9 +4,13 @@ pub mod optacc;
 
 #[cfg(striped)]
 pub mod bck_filter;
+#[cfg(striped)]
+pub(crate) mod bck_pair;
 pub mod fm_ssv;
 #[cfg(striped)]
 pub mod fwd_filter;
+#[cfg(striped)]
+pub(crate) mod fwd_pair;
 #[cfg(striped)]
 pub mod msv_filter;
 pub mod probmx;
