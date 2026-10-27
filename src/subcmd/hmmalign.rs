@@ -6,24 +6,24 @@ use std::path::PathBuf;
 
 use clap::{ArgAction, Parser};
 
-use hmmer_pure_rs::alphabet::Alphabet;
-use hmmer_pure_rs::bg::Bg;
-use hmmer_pure_rs::dp::gmx::Gmx;
-use hmmer_pure_rs::hmmfile;
-use hmmer_pure_rs::logsum;
-use hmmer_pure_rs::msa;
-use hmmer_pure_rs::profile::{self, Profile, P7_UNILOCAL};
-use hmmer_pure_rs::sequence::{self, Sequence, SequenceFormat};
-use hmmer_pure_rs::trace::State;
+use tongs::alphabet::Alphabet;
+use tongs::bg::Bg;
+use tongs::dp::gmx::Gmx;
+use tongs::hmmfile;
+use tongs::logsum;
+use tongs::msa;
+use tongs::profile::{self, Profile, P7_UNILOCAL};
+use tongs::sequence::{self, Sequence, SequenceFormat};
+use tongs::trace::State;
 #[cfg(not(target_arch = "x86_64"))]
-use hmmer_pure_rs::{
+use tongs::{
     dp::generic_backward::g_backward,
     dp::generic_decoding::g_decoding,
     dp::generic_fwdback::g_forward,
     dp::generic_optacc::{g_oa_trace, g_optimal_accuracy},
 };
 #[cfg(target_arch = "x86_64")]
-use hmmer_pure_rs::{
+use tongs::{
     simd::oprofile::{OProfile, P7O_C, P7O_J, P7O_LOOP, P7O_N},
     simd::probmx::{p_decoding_to_gmx, ProbMx},
 };
@@ -233,7 +233,7 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
         OutFormat::A2m => write_a2m(
             out,
             &msa,
-            hmm.abc_type == hmmer_pure_rs::alphabet::AlphabetType::Amino,
+            hmm.abc_type == tongs::alphabet::AlphabetType::Amino,
         ),
         OutFormat::Psiblast => {
             msa::write_psiblast(out, &write_rows(&msa), Some(&msa.rfline)).unwrap();
@@ -260,9 +260,7 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
     std::process::ExitCode::SUCCESS
 }
 
-fn read_hmms_maybe_stdin(
-    path: &std::path::Path,
-) -> hmmer_pure_rs::errors::HmmerResult<Vec<hmmer_pure_rs::Hmm>> {
+fn read_hmms_maybe_stdin(path: &std::path::Path) -> tongs::errors::HmmerResult<Vec<tongs::Hmm>> {
     if path == std::path::Path::new("-") {
         let stdin = std::io::stdin();
         hmmfile::read_hmms_auto(BufReader::new(stdin.lock()))
@@ -275,7 +273,7 @@ fn open_seq_file_maybe_stdin(
     path: &std::path::Path,
     abc: &Alphabet,
     format: Option<SequenceFormat>,
-) -> hmmer_pure_rs::errors::HmmerResult<sequence::SeqFile<Box<dyn Read>>> {
+) -> tongs::errors::HmmerResult<sequence::SeqFile<Box<dyn Read>>> {
     if path == std::path::Path::new("-") {
         let sqf = sequence::SeqFile::new(Box::new(std::io::stdin()) as Box<dyn Read>, abc.clone());
         Ok(if let Some(format) = format {
@@ -510,7 +508,7 @@ fn write_rows(msa: &TextMsa) -> Vec<msa::WriteRow<'_>> {
 /// A per-sequence alignment result: the optimal-accuracy traceback and a small
 /// per-trace-position posterior vector (`pp_z[z]` = the posterior for the residue
 /// emitted at trace position `z`; 0 for non-emitting states).
-type AlignedTrace = (hmmer_pure_rs::trace::Trace, Vec<f32>);
+type AlignedTrace = (tongs::trace::Trace, Vec<f32>);
 
 /// Forward/Backward + posterior decoding + optimal-accuracy traceback for every
 /// sequence. Mirrors the per-sequence loop in C `p7_tracealign_Seqs`: the DP
@@ -518,7 +516,7 @@ type AlignedTrace = (hmmer_pure_rs::trace::Trace, Vec<f32>);
 /// sequences via `p7_gmx_GrowTo`-style reuse, so only the trace and a small
 /// O(L) posterior vector are retained per sequence — never the O(M*L) matrices.
 fn align_traces(
-    hmm: &hmmer_pure_rs::hmm::Hmm,
+    hmm: &tongs::hmm::Hmm,
     abc: &Alphabet,
     bg: &Bg,
     sequences: &[Sequence],
@@ -535,7 +533,7 @@ fn align_traces(
 
 #[cfg(target_arch = "x86_64")]
 fn align_traces_optimized(
-    hmm: &hmmer_pure_rs::hmm::Hmm,
+    hmm: &tongs::hmm::Hmm,
     abc: &Alphabet,
     bg: &Bg,
     sequences: &[Sequence],
@@ -558,17 +556,14 @@ fn align_traces_optimized(
         oa.resize_full(hmm.m, sq.n);
         pp_gmx.grow_to(hmm.m, sq.n);
 
-        let fwd_sc = unsafe {
-            hmmer_pure_rs::simd::fwd_filter::forward_parser_pmx(&sq.dsq, sq.n, &om, &mut fwd)
-        };
+        let fwd_sc =
+            unsafe { tongs::simd::fwd_filter::forward_parser_pmx(&sq.dsq, sq.n, &om, &mut fwd) };
         unsafe {
-            hmmer_pure_rs::simd::bck_filter::backward_parser_pmx(
-                &sq.dsq, sq.n, &om, fwd_sc, &mut bck,
-            );
-            hmmer_pure_rs::simd::optacc::posterior_decoding_pmx(&fwd, &bck, &om, &mut pp);
-            hmmer_pure_rs::simd::optacc::optimal_accuracy_pmx(&om, &pp, &mut oa);
+            tongs::simd::bck_filter::backward_parser_pmx(&sq.dsq, sq.n, &om, fwd_sc, &mut bck);
+            tongs::simd::optacc::posterior_decoding_pmx(&fwd, &bck, &om, &mut pp);
+            tongs::simd::optacc::optimal_accuracy_pmx(&om, &pp, &mut oa);
         }
-        let tr = unsafe { hmmer_pure_rs::simd::optacc::oa_trace_pmx(&om, &pp, &oa) };
+        let tr = unsafe { tongs::simd::optacc::oa_trace_pmx(&om, &pp, &oa) };
         let njc_loop = [
             om.xf[P7O_N][P7O_LOOP],
             om.xf[P7O_J][P7O_LOOP],
@@ -583,7 +578,7 @@ fn align_traces_optimized(
 
 #[cfg(not(target_arch = "x86_64"))]
 fn align_traces_generic(
-    hmm: &hmmer_pure_rs::hmm::Hmm,
+    hmm: &tongs::hmm::Hmm,
     abc: &Alphabet,
     bg: &Bg,
     sequences: &[Sequence],
@@ -619,7 +614,7 @@ fn align_traces_generic(
 
 /// Extract the per-residue posterior probability at each trace position, while
 /// the posterior matrix is still alive, so the O(M*L) matrix can be dropped.
-fn trace_posteriors(tr: &hmmer_pure_rs::trace::Trace, pp: &Gmx) -> Vec<f32> {
+fn trace_posteriors(tr: &tongs::trace::Trace, pp: &Gmx) -> Vec<f32> {
     let mut v = vec![0.0_f32; tr.n];
     for (z, value) in v.iter_mut().enumerate().take(tr.n) {
         *value = match tr.st[z] {
@@ -633,7 +628,7 @@ fn trace_posteriors(tr: &hmmer_pure_rs::trace::Trace, pp: &Gmx) -> Vec<f32> {
 }
 
 fn build_text_msa(
-    hmm: &hmmer_pure_rs::hmm::Hmm,
+    hmm: &tongs::hmm::Hmm,
     abc: &Alphabet,
     bg: &Bg,
     sequences: &[Sequence],
@@ -698,18 +693,18 @@ fn build_text_msa(
 /// both the source MSA and the new traces, then emits a merged alignment. Mirrors
 /// the `map_alignment()` + main-loop path in hmmalign.c.
 fn build_text_msa_with_mapali(
-    hmm: &hmmer_pure_rs::hmm::Hmm,
+    hmm: &tongs::hmm::Hmm,
     abc: &Alphabet,
     bg: &Bg,
     sequences: &[Sequence],
     mapped: &msa::Msa,
     trim: bool,
 ) -> TextMsa {
-    if hmm.flags & hmmer_pure_rs::hmm::P7H_CHKSUM == 0 {
+    if hmm.flags & tongs::hmm::P7H_CHKSUM == 0 {
         eprintln!("HMM has no checksum. --mapali unreliable without it.");
         std::process::exit(1);
     }
-    if hmm.flags & hmmer_pure_rs::hmm::P7H_MAP == 0 || hmm.map.is_none() {
+    if hmm.flags & tongs::hmm::P7H_MAP == 0 || hmm.map.is_none() {
         eprintln!("HMM has no map. --mapali can't work without it.");
         std::process::exit(1);
     }
@@ -796,7 +791,7 @@ fn faux_from_mapped_msa(
     map: &[i32],
     abc: &Alphabet,
     m: usize,
-) -> Vec<(Sequence, hmmer_pure_rs::trace::Trace)> {
+) -> Vec<(Sequence, tongs::trace::Trace)> {
     let mut matassign = vec![false; mapped.alen + 1];
     for k in 1..=m {
         matassign[map[k] as usize] = true;
@@ -809,7 +804,7 @@ fn faux_from_mapped_msa(
             sq.acc = mapped.sqacc[idx].clone();
             sq.desc = mapped.sqdesc[idx].clone();
 
-            let mut tr = hmmer_pure_rs::trace::Trace::new();
+            let mut tr = tongs::trace::Trace::new();
             tr.append(State::B, 0, 0);
 
             let mut k = 0usize;
@@ -848,7 +843,7 @@ fn faux_from_mapped_msa(
             tr.l = mapped.alen;
             sq.n = sq.dsq.len() - 1;
             sq.l = sq.n;
-            sq.dsq.push(hmmer_pure_rs::alphabet::DSQ_SENTINEL);
+            sq.dsq.push(tongs::alphabet::DSQ_SENTINEL);
 
             (sq, tr)
         })
@@ -943,7 +938,7 @@ fn map_new_msa(
 fn make_text_row(
     abc: &Alphabet,
     sq: &Sequence,
-    tr: &hmmer_pure_rs::trace::Trace,
+    tr: &tongs::trace::Trace,
     pp_z: &[f32],
     matuse: &[bool],
     matmap: &[usize],
@@ -1006,8 +1001,8 @@ fn make_text_row(
 /// (XMX) portion of the posterior decoding matrix.
 fn state_pp_index(st: State) -> usize {
     match st {
-        State::N => hmmer_pure_rs::dp::gmx::P7G_N,
-        State::C => hmmer_pure_rs::dp::gmx::P7G_C,
+        State::N => tongs::dp::gmx::P7G_N,
+        State::C => tongs::dp::gmx::P7G_C,
         _ => unreachable!(),
     }
 }

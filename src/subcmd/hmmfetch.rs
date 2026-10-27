@@ -8,8 +8,8 @@ use std::path::PathBuf;
 
 use clap::{ArgAction, Parser};
 
-use hmmer_pure_rs::hmmfile;
-use hmmer_pure_rs::ssi;
+use tongs::hmmfile;
+use tongs::ssi;
 
 #[derive(Parser)]
 #[command(name = "hmmfetch", about = "Retrieve HMM(s) from an HMM file by name")]
@@ -71,7 +71,7 @@ where
         // 0-byte stub, and fail. (Detected by re-using the uniform-alphabet
         // whole-file reader purely as a validator.)
         if !ssi::path_with_appended_suffix(&args.hmmfile, ".ssi").exists() {
-            if let Err(hmmer_pure_rs::errors::HmmerError::Format(ref msg)) =
+            if let Err(tongs::errors::HmmerError::Format(ref msg)) =
                 hmmfile::read_hmm_file_auto(&args.hmmfile)
             {
                 if msg.contains("mixed alphabets") {
@@ -230,7 +230,7 @@ where
     std::process::ExitCode::SUCCESS
 }
 
-fn fetch_one(args: &Args, key: &str, hmms: &[hmmer_pure_rs::Hmm]) {
+fn fetch_one(args: &Args, key: &str, hmms: &[tongs::Hmm]) {
     let found = hmms
         .iter()
         .find(|h| h.name == key || h.acc.as_deref() == Some(key));
@@ -247,7 +247,7 @@ fn fetch_one(args: &Args, key: &str, hmms: &[hmmer_pure_rs::Hmm]) {
     }
 }
 
-fn write_one(args: &Args, key: &str, hmm: &hmmer_pure_rs::Hmm) {
+fn write_one(args: &Args, key: &str, hmm: &tongs::Hmm) {
     let output_name = if args.output_key {
         Some(PathBuf::from(key))
     } else {
@@ -260,7 +260,7 @@ fn write_one(args: &Args, key: &str, hmm: &hmmer_pure_rs::Hmm) {
     }
 }
 
-fn read_indexed_hmm(path: &std::path::Path, key: &str, offset: u64) -> hmmer_pure_rs::Hmm {
+fn read_indexed_hmm(path: &std::path::Path, key: &str, offset: u64) -> tongs::Hmm {
     let hmm = hmmfile::read_hmm_file_record_at(path, offset).unwrap_or_else(|e| {
         eprintln!("Error reading indexed HMM record: {}", e);
         std::process::exit(1);
@@ -315,9 +315,7 @@ fn read_keys(path: &str) -> Vec<String> {
     parse_lines(path, std::io::BufReader::new(file).lines())
 }
 
-fn read_hmms_maybe_stdin(
-    path: &std::path::Path,
-) -> hmmer_pure_rs::errors::HmmerResult<Vec<hmmer_pure_rs::Hmm>> {
+fn read_hmms_maybe_stdin(path: &std::path::Path) -> tongs::errors::HmmerResult<Vec<tongs::Hmm>> {
     if path == std::path::Path::new("-") {
         let stdin = std::io::stdin();
         hmmfile::read_hmms_allow_mixed_formats(BufReader::new(stdin.lock()))

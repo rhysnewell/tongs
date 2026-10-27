@@ -8,13 +8,13 @@ use std::path::PathBuf;
 
 use clap::Parser;
 
-use hmmer_pure_rs::alphabet::Alphabet;
-use hmmer_pure_rs::bg::Bg;
-use hmmer_pure_rs::hmm::{II, MI};
-use hmmer_pure_rs::hmmfile;
-use hmmer_pure_rs::output::{fmt_fixed2, fmt_width6_3};
-use hmmer_pure_rs::profile;
-use hmmer_pure_rs::util::cmath::{c_log_f64, ESL_CONST_LOG2R};
+use tongs::alphabet::Alphabet;
+use tongs::bg::Bg;
+use tongs::hmm::{II, MI};
+use tongs::hmmfile;
+use tongs::output::{fmt_fixed2, fmt_width6_3};
+use tongs::profile;
+use tongs::util::cmath::{c_log_f64, ESL_CONST_LOG2R};
 
 #[derive(Parser)]
 #[command(name = "hmmlogo", about = "Generate HMM logo data for visualization")]
@@ -137,9 +137,7 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
     std::process::ExitCode::SUCCESS
 }
 
-fn read_hmms_maybe_stdin(
-    path: &std::path::Path,
-) -> hmmer_pure_rs::errors::HmmerResult<Vec<hmmer_pure_rs::Hmm>> {
+fn read_hmms_maybe_stdin(path: &std::path::Path) -> tongs::errors::HmmerResult<Vec<tongs::Hmm>> {
     if path == std::path::Path::new("-") {
         let stdin = std::io::stdin();
         hmmfile::read_first_hmm(BufReader::new(stdin.lock())).map(|hmm| vec![hmm])
@@ -157,12 +155,7 @@ fn max_height(bg: &Bg) -> f32 {
     (c_log_f64(1.0 / min_p as f64) * ESL_CONST_LOG2R) as f32
 }
 
-fn residue_heights(
-    hmm: &hmmer_pure_rs::Hmm,
-    bg: &Bg,
-    node: usize,
-    mode: LogoMode,
-) -> (f32, Vec<f32>) {
+fn residue_heights(hmm: &tongs::Hmm, bg: &Bg, node: usize, mode: LogoMode) -> (f32, Vec<f32>) {
     let k = hmm.abc_k;
     let mut relent = 0.0_f32;
     let mut above_bg_prob_sum = 0.0_f32;
@@ -245,14 +238,14 @@ mod tests {
     /// modes keep the p<=0 guard and leave the height at 0.0, matching C.
     #[test]
     fn hmmlogo_score_mode_zero_emission_is_neg_inf() {
-        use hmmer_pure_rs::alphabet::AlphabetType;
+        use tongs::alphabet::AlphabetType;
 
         let abc = Alphabet::new(AlphabetType::Amino);
         let bg = Bg::new(&abc);
         let k = abc.k;
 
         // One node, residue 0 has zero emission, residue 1 has a nonzero prob.
-        let mut hmm = hmmer_pure_rs::Hmm::new(1, AlphabetType::Amino, k);
+        let mut hmm = tongs::Hmm::new(1, AlphabetType::Amino, k);
         hmm.mat[1][0] = 0.0;
         hmm.mat[1][1] = 1.0;
 

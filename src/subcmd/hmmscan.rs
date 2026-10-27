@@ -8,18 +8,18 @@ use std::path::PathBuf;
 
 use clap::Parser;
 
-use hmmer_pure_rs::alphabet::Alphabet;
-use hmmer_pure_rs::bg::Bg;
-use hmmer_pure_rs::hmmfile_binary;
-use hmmer_pure_rs::logsum;
-use hmmer_pure_rs::output::{fmt_g, fmt_width5_1};
-use hmmer_pure_rs::pipeline::{BitCutoff, Pipeline};
-use hmmer_pure_rs::pressed;
-use hmmer_pure_rs::profile::{self, Profile, P7_LOCAL};
-use hmmer_pure_rs::sequence::{self, Sequence, SequenceFormat};
-use hmmer_pure_rs::simd::oprofile::OProfile;
-use hmmer_pure_rs::tophits::TopHits;
-use hmmer_pure_rs::util::cmath::c_exp_f64;
+use tongs::alphabet::Alphabet;
+use tongs::bg::Bg;
+use tongs::hmmfile_binary;
+use tongs::logsum;
+use tongs::output::{fmt_g, fmt_width5_1};
+use tongs::pipeline::{BitCutoff, Pipeline};
+use tongs::pressed;
+use tongs::profile::{self, Profile, P7_LOCAL};
+use tongs::sequence::{self, Sequence, SequenceFormat};
+use tongs::simd::oprofile::OProfile;
+use tongs::tophits::TopHits;
+use tongs::util::cmath::c_exp_f64;
 
 #[derive(Parser)]
 #[command(
@@ -253,7 +253,7 @@ fn parse_positive_f64(s: &str) -> Result<f64, String> {
 pub fn run(args: Vec<String>) -> std::process::ExitCode {
     let cmdline = args.join(" ");
     let table_cmdline = normalize_hmmscan_table_cmdline(&cmdline);
-    let args = hmmer_pure_rs::util::apply_hmmer_ncpu_env_default(args);
+    let args = tongs::util::apply_hmmer_ncpu_env_default(args);
     let args = Args::parse_from(&args);
 
     validate_sequence_format("hmmscan --qformat", args.qformat.as_deref());
@@ -264,7 +264,7 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
     if use_parallel {
         rayon::ThreadPoolBuilder::new()
             .num_threads(args.cpu)
-            .start_handler(|_| hmmer_pure_rs::util::simd_env::init())
+            .start_handler(|_| tongs::util::simd_env::init())
             .build_global()
             .ok();
     }
@@ -451,7 +451,7 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
             writeln!(out, "Description: {}", sq.desc).unwrap();
         }
 
-        let scored: Vec<(Option<hmmer_pure_rs::tophits::Hit>, PipelineStats)> = if !use_parallel {
+        let scored: Vec<(Option<tongs::tophits::Hit>, PipelineStats)> = if !use_parallel {
             hmms.iter()
                 .zip(pressed_oprofiles.iter_mut())
                 .zip(profiles.iter_mut())
@@ -633,7 +633,7 @@ fn normalize_hmmscan_table_cmdline(cmdline: &str) -> String {
     }
 }
 
-fn display_name(hit: &hmmer_pure_rs::tophits::Hit, prefer_acc: bool) -> &str {
+fn display_name(hit: &tongs::tophits::Hit, prefer_acc: bool) -> &str {
     if prefer_acc && !hit.acc.is_empty() {
         &hit.acc
     } else {
@@ -741,7 +741,7 @@ fn write_hmmscan_option_header(out: &mut dyn Write, args: &Args, cmdline: &str) 
         writeln!(
             out,
             "# sequence search space set to:    {}",
-            hmmer_pure_rs::output::fmt_fixed0(z)
+            tongs::output::fmt_fixed0(z)
         )
         .unwrap();
     }
@@ -749,7 +749,7 @@ fn write_hmmscan_option_header(out: &mut dyn Write, args: &Args, cmdline: &str) 
         writeln!(
             out,
             "# domain search space set to:      {}",
-            hmmer_pure_rs::output::fmt_fixed0(domz)
+            tongs::output::fmt_fixed0(domz)
         )
         .unwrap();
     }
@@ -788,7 +788,7 @@ fn open_query_seq_file(
     path: &std::path::Path,
     abc: &Alphabet,
     format: Option<&str>,
-) -> hmmer_pure_rs::errors::HmmerResult<sequence::SeqFile<Box<dyn std::io::Read>>> {
+) -> tongs::errors::HmmerResult<sequence::SeqFile<Box<dyn std::io::Read>>> {
     if let Some(format) = format {
         sequence::open_seq_file_with_format(path, abc, SequenceFormat::from_name(format).unwrap())
     } else {
@@ -810,7 +810,7 @@ fn write_hmmscan_score_table<W: Write + ?Sized>(
     prefer_acc: bool,
     textw: usize,
 ) {
-    use hmmer_pure_rs::tophits::P7_IS_REPORTED;
+    use tongs::tophits::P7_IS_REPORTED;
 
     let model_namew = th
         .hits
@@ -854,7 +854,7 @@ fn write_hmmscan_score_table<W: Write + ?Sized>(
         if hit.flags & P7_IS_REPORTED == 0 {
             continue;
         }
-        if hit.flags & hmmer_pure_rs::tophits::P7_IS_INCLUDED == 0 && !have_printed_incthresh {
+        if hit.flags & tongs::tophits::P7_IS_INCLUDED == 0 && !have_printed_incthresh {
             writeln!(out, "  ------ inclusion threshold ------").unwrap();
             have_printed_incthresh = true;
         }
@@ -867,12 +867,12 @@ fn write_hmmscan_score_table<W: Write + ?Sized>(
         writeln!(
             out,
             "  {} {} {}  {} {} {}  {} {:2}  {:<model_namew$}  {}",
-            hmmer_pure_rs::output::fmt_evalue(evalue),
-            hmmer_pure_rs::output::fmt_score(hit.score),
-            hmmer_pure_rs::output::fmt_bias(hit.bias),
-            hmmer_pure_rs::output::fmt_evalue(dom_evalue),
-            hmmer_pure_rs::output::fmt_score(dom_score),
-            hmmer_pure_rs::output::fmt_bias(dom_bias),
+            tongs::output::fmt_evalue(evalue),
+            tongs::output::fmt_score(hit.score),
+            tongs::output::fmt_bias(hit.bias),
+            tongs::output::fmt_evalue(dom_evalue),
+            tongs::output::fmt_score(dom_score),
+            tongs::output::fmt_bias(dom_bias),
             fmt_width5_1(hit.nexpected as f64),
             hit.nreported,
             display_name(hit, prefer_acc),
@@ -898,12 +898,12 @@ fn write_hmmscan_domain_annotation(
     qname: &str,
     qacc: &str,
     qlen: usize,
-    hmms: &[hmmer_pure_rs::Hmm],
+    hmms: &[tongs::Hmm],
     prefer_acc: bool,
     noali: bool,
     textw: usize,
 ) {
-    use hmmer_pure_rs::tophits::P7_IS_REPORTED;
+    use tongs::tophits::P7_IS_REPORTED;
 
     writeln!(out).unwrap();
     writeln!(out).unwrap();
@@ -962,10 +962,10 @@ fn write_hmmscan_domain_annotation(
                 " {:3} {} {} {} {:>9} {:>9} {:7} {:7} {}{} {:7} {:7} {}{} {:7} {:7} {}{} {}",
                 reported_idx,
                 indicator,
-                hmmer_pure_rs::output::fmt_score(dom.bitscore),
-                hmmer_pure_rs::output::fmt_bias(dom.dombias),
-                hmmer_pure_rs::output::fmt_evalue(domz * c_exp_f64(dom.lnp)),
-                hmmer_pure_rs::output::fmt_evalue(z * c_exp_f64(dom.lnp)),
+                tongs::output::fmt_score(dom.bitscore),
+                tongs::output::fmt_bias(dom.dombias),
+                tongs::output::fmt_evalue(domz * c_exp_f64(dom.lnp)),
+                tongs::output::fmt_evalue(z * c_exp_f64(dom.lnp)),
                 hf,
                 ht,
                 hmm_left,
@@ -978,7 +978,7 @@ fn write_hmmscan_domain_annotation(
                 dom.jenv,
                 env_left,
                 env_right,
-                hmmer_pure_rs::output::fmt_fixed2(acc as f64),
+                tongs::output::fmt_fixed2(acc as f64),
             )
             .unwrap();
         }
@@ -994,8 +994,8 @@ fn write_hmmscan_domain_annotation(
                     out,
                     "  == domain {}  score: {} bits;  conditional E-value: {}",
                     reported_idx,
-                    hmmer_pure_rs::output::fmt_fixed1(dom.bitscore as f64),
-                    hmmer_pure_rs::output::fmt_evalue(domz * c_exp_f64(dom.lnp)).trim()
+                    tongs::output::fmt_fixed1(dom.bitscore as f64),
+                    tongs::output::fmt_evalue(domz * c_exp_f64(dom.lnp)).trim()
                 )
                 .unwrap();
 
@@ -1017,7 +1017,7 @@ fn write_hmmscan_domain_annotation(
                         }
                         s
                     });
-                    hmmer_pure_rs::tophits::print_alidisplay_blocks_acc(
+                    tongs::tophits::print_alidisplay_blocks_acc(
                         out,
                         &hit.name,
                         &hit.acc,
@@ -1037,8 +1037,8 @@ fn write_hmmscan_domain_annotation(
 }
 
 fn hmmscan_model_cs_for_hit<'a>(
-    hmms: &'a [hmmer_pure_rs::Hmm],
-    hit: &hmmer_pure_rs::tophits::Hit,
+    hmms: &'a [tongs::Hmm],
+    hit: &tongs::tophits::Hit,
 ) -> Option<&'a [u8]> {
     hmms.iter()
         .find(|hmm| {
@@ -1052,7 +1052,7 @@ fn hmmscan_model_cs_for_hit<'a>(
 }
 
 fn score_hmmscan_model(
-    hmm: &hmmer_pure_rs::Hmm,
+    hmm: &tongs::Hmm,
     gm: &mut Profile,
     oprofile: &mut OProfile,
     bg: &Bg,
@@ -1060,7 +1060,7 @@ fn score_hmmscan_model(
     args: &Args,
     bit_cutoff: Option<BitCutoff>,
     model_idx: usize,
-) -> (Option<hmmer_pure_rs::tophits::Hit>, PipelineStats) {
+) -> (Option<tongs::tophits::Hit>, PipelineStats) {
     let mut local_bg = bg.clone();
     local_bg.set_filter(hmm.m, &hmm.compo);
     local_bg.set_length(sq.n);
@@ -1071,11 +1071,11 @@ fn score_hmmscan_model(
     configure_acceleration(&mut pli, args);
     if let Some(z) = args.z_value {
         pli.z = z;
-        pli.z_setby = hmmer_pure_rs::pipeline::ZSetBy::Option;
+        pli.z_setby = tongs::pipeline::ZSetBy::Option;
     }
     if let Some(domz) = args.domz_value {
         pli.domz = domz;
-        pli.domz_setby = hmmer_pure_rs::pipeline::ZSetBy::Option;
+        pli.domz_setby = tongs::pipeline::ZSetBy::Option;
     }
     if let Some(cutoff) = bit_cutoff {
         pli.use_bit_cutoffs = cutoff;
@@ -1163,42 +1163,42 @@ fn write_scan_pipeline_stats<W: Write + ?Sized>(
         out,
         "Passed MSV filter:               {:>11}  ({}); expected {} ({})",
         stats.n_past_msv,
-        hmmer_pure_rs::output::fmt_g(frac(stats.n_past_msv)),
-        hmmer_pure_rs::output::fmt_fixed1(expected_msv),
-        hmmer_pure_rs::output::fmt_g(f1)
+        tongs::output::fmt_g(frac(stats.n_past_msv)),
+        tongs::output::fmt_fixed1(expected_msv),
+        tongs::output::fmt_g(f1)
     )
     .unwrap();
     writeln!(
         out,
         "Passed bias filter:              {:>11}  ({}); expected {} ({})",
         stats.n_past_bias,
-        hmmer_pure_rs::output::fmt_g(frac(stats.n_past_bias)),
-        hmmer_pure_rs::output::fmt_fixed1(expected_msv),
-        hmmer_pure_rs::output::fmt_g(f1)
+        tongs::output::fmt_g(frac(stats.n_past_bias)),
+        tongs::output::fmt_fixed1(expected_msv),
+        tongs::output::fmt_g(f1)
     )
     .unwrap();
     writeln!(
         out,
         "Passed Vit filter:               {:>11}  ({}); expected {} ({})",
         stats.n_past_vit,
-        hmmer_pure_rs::output::fmt_g(frac(stats.n_past_vit)),
-        hmmer_pure_rs::output::fmt_fixed1(expected_vit),
-        hmmer_pure_rs::output::fmt_g(f2)
+        tongs::output::fmt_g(frac(stats.n_past_vit)),
+        tongs::output::fmt_fixed1(expected_vit),
+        tongs::output::fmt_g(f2)
     )
     .unwrap();
     writeln!(
         out,
         "Passed Fwd filter:               {:>11}  ({}); expected {} ({})",
         stats.n_past_fwd,
-        hmmer_pure_rs::output::fmt_g(frac(stats.n_past_fwd)),
-        hmmer_pure_rs::output::fmt_fixed1(expected_fwd),
-        hmmer_pure_rs::output::fmt_g(f3)
+        tongs::output::fmt_g(frac(stats.n_past_fwd)),
+        tongs::output::fmt_fixed1(expected_fwd),
+        tongs::output::fmt_g(f3)
     )
     .unwrap();
     writeln!(
         out,
         "Initial search space (Z):        {}  {}",
-        hmmer_pure_rs::output::fmt_width11_0(z),
+        tongs::output::fmt_width11_0(z),
         if z_from_option {
             "[as set by --Z on cmdline]"
         } else {
@@ -1209,7 +1209,7 @@ fn write_scan_pipeline_stats<W: Write + ?Sized>(
     writeln!(
         out,
         "Domain search space  (domZ):     {}  {}",
-        hmmer_pure_rs::output::fmt_width11_0(domz),
+        tongs::output::fmt_width11_0(domz),
         if domz_from_option {
             "[as set by --domZ on cmdline]"
         } else {
@@ -1219,7 +1219,7 @@ fn write_scan_pipeline_stats<W: Write + ?Sized>(
     .unwrap();
 }
 
-fn alphabet_from_hmms(hmms: &[hmmer_pure_rs::Hmm]) -> Result<Alphabet, String> {
+fn alphabet_from_hmms(hmms: &[tongs::Hmm]) -> Result<Alphabet, String> {
     let hmm = hmms
         .first()
         .ok_or_else(|| "pressed HMM database contains no models".to_string())?;
@@ -1275,8 +1275,8 @@ fn configure_acceleration(pli: &mut Pipeline, args: &Args) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use hmmer_pure_rs::alphabet::AlphabetType;
-    use hmmer_pure_rs::Hmm;
+    use tongs::alphabet::AlphabetType;
+    use tongs::Hmm;
 
     #[test]
     fn hmmscan_positionals_match_c_order() {

@@ -3,12 +3,12 @@
 use std::ffi::OsString;
 use std::process::ExitCode;
 
-use hmmer_pure_rs::subcmd;
+use tongs::subcmd;
 
 /// Unified CLI entry point: initializes SIMD env, parses the subcommand,
 /// and dispatches to the matching `subcmd::*::run` module.
 fn main() -> ExitCode {
-    hmmer_pure_rs::util::simd_env::init();
+    tongs::util::simd_env::init();
 
     let args: Vec<OsString> = std::env::args_os().collect();
 

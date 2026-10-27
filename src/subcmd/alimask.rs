@@ -5,10 +5,10 @@ use std::path::PathBuf;
 
 use clap::{ArgAction, Parser};
 
-use hmmer_pure_rs::alphabet::{Alphabet, AlphabetType};
-use hmmer_pure_rs::builder::{self, RelativeWeighting};
-use hmmer_pure_rs::msa;
-use hmmer_pure_rs::output::fmt_fixed3;
+use tongs::alphabet::{Alphabet, AlphabetType};
+use tongs::builder::{self, RelativeWeighting};
+use tongs::msa;
+use tongs::output::fmt_fixed3;
 
 #[derive(Parser)]
 #[command(
@@ -656,8 +656,8 @@ fn mark_fragments_old_full(msa: &mut msa::FullStockholm, abc: &Alphabet, fragthr
             .iter()
             .filter(|&&ch| {
                 let code = abc.digitize_symbol(ch);
-                code != hmmer_pure_rs::alphabet::DSQ_ILLEGAL
-                    && code != hmmer_pure_rs::alphabet::DSQ_IGNORED
+                code != tongs::alphabet::DSQ_ILLEGAL
+                    && code != tongs::alphabet::DSQ_IGNORED
                     && abc.is_residue(code)
             })
             .count();
@@ -667,8 +667,8 @@ fn mark_fragments_old_full(msa: &mut msa::FullStockholm, abc: &Alphabet, fragthr
 
         for ch in row.iter_mut() {
             let code = abc.digitize_symbol(*ch);
-            if code != hmmer_pure_rs::alphabet::DSQ_ILLEGAL
-                && code != hmmer_pure_rs::alphabet::DSQ_IGNORED
+            if code != tongs::alphabet::DSQ_ILLEGAL
+                && code != tongs::alphabet::DSQ_IGNORED
                 && abc.is_residue(code)
             {
                 break;
@@ -677,8 +677,8 @@ fn mark_fragments_old_full(msa: &mut msa::FullStockholm, abc: &Alphabet, fragthr
         }
         for ch in row.iter_mut().rev() {
             let code = abc.digitize_symbol(*ch);
-            if code != hmmer_pure_rs::alphabet::DSQ_ILLEGAL
-                && code != hmmer_pure_rs::alphabet::DSQ_IGNORED
+            if code != tongs::alphabet::DSQ_ILLEGAL
+                && code != tongs::alphabet::DSQ_IGNORED
                 && abc.is_residue(code)
             {
                 break;
@@ -858,11 +858,11 @@ fn is_rf_consensus(sym: u8) -> bool {
 /// bytes are buffered so both parses see identical content.
 fn read_stockholm_maybe_stdin(
     path: &std::path::Path,
-) -> hmmer_pure_rs::errors::HmmerResult<(Vec<msa::StockholmMsa>, Vec<msa::FullStockholm>)> {
+) -> tongs::errors::HmmerResult<(Vec<msa::StockholmMsa>, Vec<msa::FullStockholm>)> {
     if path == std::path::Path::new("-") {
         let mut bytes = Vec::new();
         std::io::Read::read_to_end(&mut std::io::stdin().lock(), &mut bytes)
-            .map_err(hmmer_pure_rs::errors::HmmerError::Io)?;
+            .map_err(tongs::errors::HmmerError::Io)?;
         let preserved = msa::read_stockholm_preserved_from_reader(BufReader::new(&bytes[..]))?;
         let full = msa::read_stockholm_full_from_reader(BufReader::new(&bytes[..]))?;
         Ok((preserved, full))

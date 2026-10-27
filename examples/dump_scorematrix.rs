@@ -1,8 +1,8 @@
 //! Cross-check harness: dumps lambda and conditional probabilities exactly as
 //! the C driver in the parity workflow does, so the two can be diffed.
-use hmmer_pure_rs::alphabet::{Alphabet, AlphabetType};
-use hmmer_pure_rs::bg::Bg;
-use hmmer_pure_rs::util::scorematrix::{joint_to_conditional_on_query, ScoreMatrix};
+use tongs::alphabet::{Alphabet, AlphabetType};
+use tongs::bg::Bg;
+use tongs::util::scorematrix::{joint_to_conditional_on_query, ScoreMatrix};
 
 fn run(abc_type: AlphabetType, mxname: &str) {
     let abc = Alphabet::new(abc_type);

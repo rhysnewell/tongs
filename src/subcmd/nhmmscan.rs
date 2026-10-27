@@ -6,18 +6,18 @@ use std::path::PathBuf;
 
 use clap::Parser;
 
-use hmmer_pure_rs::alphabet::Alphabet;
-use hmmer_pure_rs::bg::Bg;
-use hmmer_pure_rs::builder::{self, DEFAULT_WINDOW_BETA};
-use hmmer_pure_rs::hmmfile_binary;
-use hmmer_pure_rs::logsum;
-use hmmer_pure_rs::output::{fmt_bias, fmt_fixed0, fmt_g, fmt_score};
-use hmmer_pure_rs::pipeline::{BitCutoff, Pipeline};
-use hmmer_pure_rs::pressed;
-use hmmer_pure_rs::profile::{self, Profile, P7_LOCAL};
-use hmmer_pure_rs::sequence::{self, Sequence, SequenceFormat};
-use hmmer_pure_rs::tophits::TopHits;
-use hmmer_pure_rs::util::cmath::c_exp_f64;
+use tongs::alphabet::Alphabet;
+use tongs::bg::Bg;
+use tongs::builder::{self, DEFAULT_WINDOW_BETA};
+use tongs::hmmfile_binary;
+use tongs::logsum;
+use tongs::output::{fmt_bias, fmt_fixed0, fmt_g, fmt_score};
+use tongs::pipeline::{BitCutoff, Pipeline};
+use tongs::pressed;
+use tongs::profile::{self, Profile, P7_LOCAL};
+use tongs::sequence::{self, Sequence, SequenceFormat};
+use tongs::tophits::TopHits;
+use tongs::util::cmath::c_exp_f64;
 
 #[derive(Parser)]
 #[command(
@@ -233,7 +233,7 @@ fn parse_window_beta(s: &str) -> Result<f64, String> {
 pub fn run(args: Vec<String>) -> std::process::ExitCode {
     let cmdline = args.join(" ");
     let table_cmdline = normalize_nhmmscan_table_cmdline(&cmdline);
-    let args = hmmer_pure_rs::util::apply_hmmer_ncpu_env_default(args);
+    let args = tongs::util::apply_hmmer_ncpu_env_default(args);
     let args = Args::parse_from(&args);
     validate_sequence_format("nhmmscan --qformat", args.qformat.as_deref());
     if matches!(args.w_length, Some(0..=3)) {
@@ -246,7 +246,7 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
     if args.cpu > 0 {
         rayon::ThreadPoolBuilder::new()
             .num_threads(args.cpu)
-            .start_handler(|_| hmmer_pure_rs::util::simd_env::init())
+            .start_handler(|_| tongs::util::simd_env::init())
             .build_global()
             .ok();
     }
@@ -444,7 +444,7 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
 
     let mut sq = Sequence::new();
     let mut query_idx = 0usize;
-    let search_space_ln = hmmer_pure_rs::util::cmath::c_log_f64(hmms.len() as f64);
+    let search_space_ln = tongs::util::cmath::c_log_f64(hmms.len() as f64);
     while sqf.read(&mut sq).unwrap_or_else(|e| {
         eprintln!("Error reading sequence file: {}", e);
         std::process::exit(1);
@@ -452,8 +452,8 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
         query_idx += 1;
         writeln!(out, "Query:       {}  [L={}]", sq.name, sq.n).unwrap();
 
-        let scan_model = |idx: usize, hmm: &hmmer_pure_rs::hmm::Hmm| {
-            hmmer_pure_rs::util::simd_env::init();
+        let scan_model = |idx: usize, hmm: &tongs::hmm::Hmm| {
+            tongs::util::simd_env::init();
             let mut local_bg = bg.clone();
             local_bg.set_filter(hmm.m, &hmm.compo);
             local_bg.set_length(sq.n);
@@ -613,7 +613,7 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
                 .collect()
         };
         let mut stats = PipelineStats::default();
-        let all_hits: Vec<hmmer_pure_rs::tophits::Hit> = scan_results
+        let all_hits: Vec<tongs::tophits::Hit> = scan_results
             .into_iter()
             .flat_map(|result| {
                 let result = result.unwrap_or_else(|err| {
@@ -724,7 +724,7 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
     std::process::ExitCode::SUCCESS
 }
 
-fn display_name(hit: &hmmer_pure_rs::tophits::Hit, prefer_acc: bool) -> &str {
+fn display_name(hit: &tongs::tophits::Hit, prefer_acc: bool) -> &str {
     if prefer_acc && !hit.acc.is_empty() {
         &hit.acc
     } else {
@@ -845,7 +845,7 @@ fn open_query_seq_file(
     path: &std::path::Path,
     abc: &Alphabet,
     format: Option<&str>,
-) -> hmmer_pure_rs::errors::HmmerResult<sequence::SeqFile<Box<dyn std::io::Read>>> {
+) -> tongs::errors::HmmerResult<sequence::SeqFile<Box<dyn std::io::Read>>> {
     if let Some(format) = format {
         sequence::open_seq_file_with_format(path, abc, SequenceFormat::from_name(format).unwrap())
     } else {
@@ -853,11 +853,7 @@ fn open_query_seq_file(
     }
 }
 
-fn nhmmscan_max_length(
-    hmm: &hmmer_pure_rs::hmm::Hmm,
-    _w_length: Option<i32>,
-    _w_beta: Option<f64>,
-) -> i32 {
+fn nhmmscan_max_length(hmm: &tongs::hmm::Hmm, _w_length: Option<i32>, _w_beta: Option<f64>) -> i32 {
     // C nhmmscan parses and reports --w_beta/--w_length, but the scan path
     // searches pressed profiles with their serialized MAXL unchanged.
     if hmm.max_length > 0 {
@@ -873,7 +869,7 @@ fn nhmmscan_long_target_ln_adjustment(
     search_space_ln: f64,
 ) -> f64 {
     let nw_ratio = (seq_len as f32) / (max_length as f32);
-    hmmer_pure_rs::util::cmath::c_log_f64(nw_ratio as f64) + search_space_ln
+    tongs::util::cmath::c_log_f64(nw_ratio as f64) + search_space_ln
 }
 
 #[derive(Default)]
@@ -885,7 +881,7 @@ struct PipelineStats {
 }
 
 struct ScanModelResult {
-    hits: Vec<hmmer_pure_rs::tophits::Hit>,
+    hits: Vec<tongs::tophits::Hit>,
     stats: PipelineStats,
 }
 
@@ -898,7 +894,7 @@ fn write_nhmmscan_stdout_hits(
     noali: bool,
     textw: usize,
 ) {
-    use hmmer_pure_rs::tophits::{P7_IS_INCLUDED, P7_IS_REPORTED};
+    use tongs::tophits::{P7_IS_INCLUDED, P7_IS_REPORTED};
 
     writeln!(out, "Scores for complete hit:").unwrap();
     writeln!(
@@ -931,7 +927,7 @@ fn write_nhmmscan_stdout_hits(
         writeln!(
             out,
             "  {:>9} {} {}  {:<8} {:>6} {:>6} {}",
-            hmmer_pure_rs::output::fmt_evalue(z * c_exp_f64(hit.lnp)),
+            tongs::output::fmt_evalue(z * c_exp_f64(hit.lnp)),
             fmt_score(hit.score),
             fmt_bias(hit.bias),
             display_name(hit, prefer_acc),
@@ -1015,9 +1011,9 @@ fn write_nhmmscan_stdout_hits(
                 out,
                 " {} {} {} {:>9}   {:>7}   {:>7} {}{} {:>9} {:>9} {}{} {:>9} {:>9} {}{} {:>9}    {}",
                 indicator,
-                hmmer_pure_rs::output::fmt_score(dom.bitscore),
-                hmmer_pure_rs::output::fmt_bias(dom.dombias),
-                hmmer_pure_rs::output::fmt_evalue(z * c_exp_f64(dom.lnp)),
+                tongs::output::fmt_score(dom.bitscore),
+                tongs::output::fmt_bias(dom.dombias),
+                tongs::output::fmt_evalue(z * c_exp_f64(dom.lnp)),
                 hmmfrom,
                 hmmto,
                 hmm_left,
@@ -1031,7 +1027,7 @@ fn write_nhmmscan_stdout_hits(
                 env_left,
                 env_right,
                 hit.n,
-                hmmer_pure_rs::output::fmt_fixed2(acc as f64),
+                tongs::output::fmt_fixed2(acc as f64),
             )
             .unwrap();
         }
@@ -1043,11 +1039,11 @@ fn write_nhmmscan_stdout_hits(
                 writeln!(
                     out,
                     "  score: {} bits",
-                    hmmer_pure_rs::output::fmt_fixed1(dom.bitscore as f64)
+                    tongs::output::fmt_fixed1(dom.bitscore as f64)
                 )
                 .unwrap();
                 if let Some(ref ad) = dom.ad {
-                    hmmer_pure_rs::tophits::print_alidisplay_blocks(
+                    tongs::tophits::print_alidisplay_blocks(
                         out,
                         display_name(hit, prefer_acc),
                         qname,
@@ -1103,39 +1099,39 @@ fn write_nhmmscan_pipeline_stats<W: Write + ?Sized>(
         out,
         "Residues passing SSV filter:     {:>11}  ({}); expected ({})",
         stats.n_past_msv,
-        hmmer_pure_rs::output::fmt_g3(frac(stats.n_past_msv)),
-        hmmer_pure_rs::output::fmt_g3(f1)
+        tongs::output::fmt_g3(frac(stats.n_past_msv)),
+        tongs::output::fmt_g3(f1)
     )
     .unwrap();
     writeln!(
         out,
         "Residues passing bias filter:    {:>11}  ({}); expected ({})",
         stats.n_past_bias,
-        hmmer_pure_rs::output::fmt_g3(frac(stats.n_past_bias)),
-        hmmer_pure_rs::output::fmt_g3(f1)
+        tongs::output::fmt_g3(frac(stats.n_past_bias)),
+        tongs::output::fmt_g3(f1)
     )
     .unwrap();
     writeln!(
         out,
         "Residues passing Vit filter:     {:>11}  ({}); expected ({})",
         stats.n_past_vit,
-        hmmer_pure_rs::output::fmt_g3(frac(stats.n_past_vit)),
-        hmmer_pure_rs::output::fmt_g3(f2)
+        tongs::output::fmt_g3(frac(stats.n_past_vit)),
+        tongs::output::fmt_g3(f2)
     )
     .unwrap();
     writeln!(
         out,
         "Residues passing Fwd filter:     {:>11}  ({}); expected ({})",
         stats.n_past_fwd,
-        hmmer_pure_rs::output::fmt_g3(frac(stats.n_past_fwd)),
-        hmmer_pure_rs::output::fmt_g3(f3)
+        tongs::output::fmt_g3(frac(stats.n_past_fwd)),
+        tongs::output::fmt_g3(f3)
     )
     .unwrap();
     writeln!(
         out,
         "Total number of hits:            {:>11}  ({})",
         nreported,
-        hmmer_pure_rs::output::fmt_g3(frac(pos_output))
+        tongs::output::fmt_g3(frac(pos_output))
     )
     .unwrap();
     // Run-time footer (`# CPU time:` / `# Mc/sec:`) is intentionally
@@ -1147,20 +1143,20 @@ fn write_nhmmscan_pipeline_stats<W: Write + ?Sized>(
 fn reported_aligned_residues(th: &TopHits) -> u64 {
     th.hits
         .iter()
-        .filter(|hit| hit.flags & hmmer_pure_rs::tophits::P7_IS_REPORTED != 0)
+        .filter(|hit| hit.flags & tongs::tophits::P7_IS_REPORTED != 0)
         .flat_map(|hit| hit.dcl.iter())
         .filter(|dom| dom.is_reported)
         .map(|dom| ((dom.jali - dom.iali).abs() + 1) as u64)
         .sum()
 }
 
-fn nucleotide_alphabet_from_hmms(hmms: &[hmmer_pure_rs::Hmm]) -> Result<Alphabet, String> {
+fn nucleotide_alphabet_from_hmms(hmms: &[tongs::Hmm]) -> Result<Alphabet, String> {
     let hmm = hmms
         .first()
         .ok_or_else(|| "pressed HMM database contains no models".to_string())?;
     match hmm.abc_type {
-        hmmer_pure_rs::alphabet::AlphabetType::Dna => Ok(Alphabet::dna()),
-        hmmer_pure_rs::alphabet::AlphabetType::Rna => Ok(Alphabet::rna()),
+        tongs::alphabet::AlphabetType::Dna => Ok(Alphabet::dna()),
+        tongs::alphabet::AlphabetType::Rna => Ok(Alphabet::rna()),
         other => Err(format!(
             "nhmmscan requires a DNA or RNA HMM database; found {:?}",
             other
@@ -1193,7 +1189,7 @@ fn configure_thresholds(pli: &mut Pipeline, args: &Args) {
     }
 }
 
-fn convert_crick_hits_to_forward(hits: &mut [hmmer_pure_rs::tophits::Hit], n: usize) {
+fn convert_crick_hits_to_forward(hits: &mut [tongs::tophits::Hit], n: usize) {
     for hit in hits {
         for dom in &mut hit.dcl {
             let ali_hi = n as i64 - dom.iali + 1;
@@ -1217,8 +1213,8 @@ fn convert_crick_hits_to_forward(hits: &mut [hmmer_pure_rs::tophits::Hit], n: us
 #[cfg(test)]
 mod tests {
     use super::*;
-    use hmmer_pure_rs::alphabet::AlphabetType;
-    use hmmer_pure_rs::Hmm;
+    use tongs::alphabet::AlphabetType;
+    use tongs::Hmm;
 
     #[test]
     fn nhmmscan_positionals_match_c_order() {
@@ -1311,9 +1307,9 @@ mod tests {
 
     #[test]
     fn nhmmscan_long_target_adjustment_folds_model_search_space_into_lnp() {
-        let search_space_ln = hmmer_pure_rs::util::cmath::c_log_f64(12.0);
+        let search_space_ln = tongs::util::cmath::c_log_f64(12.0);
         let got = nhmmscan_long_target_ln_adjustment(800, 200, search_space_ln);
-        let expected = hmmer_pure_rs::util::cmath::c_log_f64(48.0);
+        let expected = tongs::util::cmath::c_log_f64(48.0);
 
         assert!((got - expected).abs() < 1e-12);
     }

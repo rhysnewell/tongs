@@ -1,12 +1,12 @@
 [package]
-name = "hmmer-pure-rs"
-version = "0.8.0"
+name = "tongs"
+version = "0.1.0"
 edition = "2021"
-description = "Pure Rust port of HMMER 3.4 — biological sequence analysis using profile HMMs"
+description = "A fast Rust HMMER 3.4, forked from hmmer-pure-rs"
 license = "BSD-3-Clause"
-repository = "https://github.com/henriksson-lab/hmmer-pure-rs"
-homepage = "https://github.com/henriksson-lab/hmmer-pure-rs"
-documentation = "https://docs.rs/hmmer-pure-rs"
+repository = "https://github.com/rhysnewell/tongs"
+homepage = "https://github.com/rhysnewell/tongs"
+documentation = "https://docs.rs/tongs"
 readme = "README.md"
 keywords = ["bioinformatics", "hmm", "hmmer", "sequence-analysis", "profile-hmm"]
 categories = ["science", "command-line-utilities"]
@@ -57,13 +57,10 @@ divsufsort = "2"
 flate2 = "1"
 memmap2 = "0.9"
 socket2 = "0.5"
-tracehash = { package = "tracehash-rs", version = "0.1", optional = true }
 
-[features]
-tracehash = ["dep:tracehash"]
 
 [[bin]]
-name = "hmmer"
+name = "tongs"
 path = "src/main.rs"
 
 [dev-dependencies]

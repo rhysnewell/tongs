@@ -10,276 +10,6 @@ use crate::alphabet::Dsq;
 use crate::simd::oprofile::*;
 use crate::util::cmath::c_log_f64;
 
-/// Tracehash helper: sum one DP state (M/D/I) across stripes and emit a quantized hash.
-///
-/// Iterates lanes [`q_start`, `q_end`) of the striped row, accumulating the per-lane
-/// values for the chosen state, then dispatches to the correct tracehash label.
-/// Used only under `feature = "tracehash"` to compare against the C reference.
-#[cfg(all(feature = "tracehash", target_arch = "x86_64"))]
-fn trace_engine_sum_q1e5(
-    name: &'static str,
-    dsq: &[Dsq],
-    dsq_offset: usize,
-    l: usize,
-    m: usize,
-    q: usize,
-    row: &[[f32; 4]],
-    state: usize,
-    q_start: usize,
-    q_end: usize,
-) {
-    let mut sum = 0.0_f32;
-    for qi in q_start.min(q)..q_end.min(q) {
-        let v = row[qi * 3 + state];
-        for (lane, val) in v.iter().enumerate() {
-            let k = qi + 1 + lane * q;
-            if k <= m {
-                sum += *val;
-            }
-        }
-    }
-
-    let mut th = match name {
-        "rowl_m" => tracehash::th_call!("simd_backward_engine_rowl_msum_q1e5"),
-        "rowl_d" => tracehash::th_call!("simd_backward_engine_rowl_dsum_q1e5"),
-        "rowl_i" => tracehash::th_call!("simd_backward_engine_rowl_isum_q1e5"),
-        "rowlm1_m" => tracehash::th_call!("simd_backward_engine_rowlm1_msum_q1e5"),
-        "rowlm1_d" => tracehash::th_call!("simd_backward_engine_rowlm1_dsum_q1e5"),
-        "rowlm1_i" => tracehash::th_call!("simd_backward_engine_rowlm1_isum_q1e5"),
-        "rowlm2_m" => tracehash::th_call!("simd_backward_engine_rowlm2_msum_q1e5"),
-        "rowlm2_d" => tracehash::th_call!("simd_backward_engine_rowlm2_dsum_q1e5"),
-        "rowlm2_i" => tracehash::th_call!("simd_backward_engine_rowlm2_isum_q1e5"),
-        "rowlm4_m" => tracehash::th_call!("simd_backward_engine_rowlm4_msum_q1e5"),
-        "rowlm4_d" => tracehash::th_call!("simd_backward_engine_rowlm4_dsum_q1e5"),
-        "rowlm4_i" => tracehash::th_call!("simd_backward_engine_rowlm4_isum_q1e5"),
-        "rowlm8_m" => tracehash::th_call!("simd_backward_engine_rowlm8_msum_q1e5"),
-        "rowlm8_d" => tracehash::th_call!("simd_backward_engine_rowlm8_dsum_q1e5"),
-        "rowlm8_i" => tracehash::th_call!("simd_backward_engine_rowlm8_isum_q1e5"),
-        "rowlm16_m" => tracehash::th_call!("simd_backward_engine_rowlm16_msum_q1e5"),
-        "rowlm16_d" => tracehash::th_call!("simd_backward_engine_rowlm16_dsum_q1e5"),
-        "rowlm16_i" => tracehash::th_call!("simd_backward_engine_rowlm16_isum_q1e5"),
-        "rowlm32_m" => tracehash::th_call!("simd_backward_engine_rowlm32_msum_q1e5"),
-        "rowlm32_d" => tracehash::th_call!("simd_backward_engine_rowlm32_dsum_q1e5"),
-        "rowlm32_i" => tracehash::th_call!("simd_backward_engine_rowlm32_isum_q1e5"),
-        "rowlm64_m" => tracehash::th_call!("simd_backward_engine_rowlm64_msum_q1e5"),
-        "rowlm64_d" => tracehash::th_call!("simd_backward_engine_rowlm64_dsum_q1e5"),
-        "rowlm64_i" => tracehash::th_call!("simd_backward_engine_rowlm64_isum_q1e5"),
-        "rowlm128_m" => tracehash::th_call!("simd_backward_engine_rowlm128_msum_q1e5"),
-        "rowlm128_d" => tracehash::th_call!("simd_backward_engine_rowlm128_dsum_q1e5"),
-        "rowlm128_i" => tracehash::th_call!("simd_backward_engine_rowlm128_isum_q1e5"),
-        "row128_m" => tracehash::th_call!("simd_backward_engine_row128_msum_q1e5"),
-        "row128_d" => tracehash::th_call!("simd_backward_engine_row128_dsum_q1e5"),
-        "row128_i" => tracehash::th_call!("simd_backward_engine_row128_isum_q1e5"),
-        "row64_m" => tracehash::th_call!("simd_backward_engine_row64_msum_q1e5"),
-        "row64_d" => tracehash::th_call!("simd_backward_engine_row64_dsum_q1e5"),
-        "row64_i" => tracehash::th_call!("simd_backward_engine_row64_isum_q1e5"),
-        "row32_m" => tracehash::th_call!("simd_backward_engine_row32_msum_q1e5"),
-        "row32_d" => tracehash::th_call!("simd_backward_engine_row32_dsum_q1e5"),
-        "row32_i" => tracehash::th_call!("simd_backward_engine_row32_isum_q1e5"),
-        "row16_m" => tracehash::th_call!("simd_backward_engine_row16_msum_q1e5"),
-        "row16_d" => tracehash::th_call!("simd_backward_engine_row16_dsum_q1e5"),
-        "row16_i" => tracehash::th_call!("simd_backward_engine_row16_isum_q1e5"),
-        "row8_m" => tracehash::th_call!("simd_backward_engine_row8_msum_q1e5"),
-        "row8_d" => tracehash::th_call!("simd_backward_engine_row8_dsum_q1e5"),
-        "row8_i" => tracehash::th_call!("simd_backward_engine_row8_isum_q1e5"),
-        "row4_m" => tracehash::th_call!("simd_backward_engine_row4_msum_q1e5"),
-        "row4_d" => tracehash::th_call!("simd_backward_engine_row4_dsum_q1e5"),
-        "row4_i" => tracehash::th_call!("simd_backward_engine_row4_isum_q1e5"),
-        "row2_m" => tracehash::th_call!("simd_backward_engine_row2_msum_q1e5"),
-        "row2_d" => tracehash::th_call!("simd_backward_engine_row2_dsum_q1e5"),
-        "row2_i" => tracehash::th_call!("simd_backward_engine_row2_isum_q1e5"),
-        "m" => tracehash::th_call!("simd_backward_engine_row1_msum_q1e5"),
-        "d" => tracehash::th_call!("simd_backward_engine_row1_dsum_q1e5"),
-        "i" => tracehash::th_call!("simd_backward_engine_row1_isum_q1e5"),
-        "phase1_m" => tracehash::th_call!("simd_backward_engine_row1_phase1_msum_q1e5"),
-        "phase1_d" => tracehash::th_call!("simd_backward_engine_row1_phase1_dsum_q1e5"),
-        "phase1_i" => tracehash::th_call!("simd_backward_engine_row1_phase1_isum_q1e5"),
-        "phase3_m" => tracehash::th_call!("simd_backward_engine_row1_phase3_msum_q1e5"),
-        "phase3_d" => tracehash::th_call!("simd_backward_engine_row1_phase3_dsum_q1e5"),
-        "phase4_d" => tracehash::th_call!("simd_backward_engine_row1_phase4_dsum_q1e5"),
-        "phase5_m" => tracehash::th_call!("simd_backward_engine_row1_phase5_msum_q1e5"),
-        "m_q0_8" => tracehash::th_call!("simd_backward_engine_row1_m_q0_8_sum_q1e5"),
-        "m_q8_16" => tracehash::th_call!("simd_backward_engine_row1_m_q8_16_sum_q1e5"),
-        "m_q16_32" => tracehash::th_call!("simd_backward_engine_row1_m_q16_32_sum_q1e5"),
-        _ => tracehash::th_call!("simd_backward_engine_row1_m_q32_end_sum_q1e5"),
-    };
-    th.input_usize(l);
-    th.input_usize(m);
-    th.input_bytes(&dsq[dsq_offset + 1..=dsq_offset + l]);
-    th.output_f32_quant(sum, 1.0e-5);
-    th.finish();
-}
-
-/// Tracehash helper: hash the fully populated M/D/I state sums for a labeled row.
-///
-/// Unpacks the SSE row into scalar lanes, then calls [`trace_engine_sum_q1e5`] three
-/// times (once per state) with row-specific tracehash labels (`rowl`, `rowlmN`, `rowN`).
-#[cfg(all(feature = "tracehash", target_arch = "x86_64"))]
-unsafe fn trace_engine_row_final_q1e5(
-    row_label: &'static str,
-    dsq: &[Dsq],
-    dsq_offset: usize,
-    l: usize,
-    m: usize,
-    q: usize,
-    dpc_buf: &[__m128],
-) {
-    let mut row = Vec::with_capacity(dpc_buf.len());
-    for v in dpc_buf {
-        let mut lanes = [0.0_f32; 4];
-        _mm_storeu_ps(lanes.as_mut_ptr(), *v);
-        row.push(lanes);
-    }
-
-    match row_label {
-        "rowl" => {
-            trace_engine_sum_q1e5("rowl_m", dsq, dsq_offset, l, m, q, &row, 0, 0, q);
-            trace_engine_sum_q1e5("rowl_d", dsq, dsq_offset, l, m, q, &row, 1, 0, q);
-            trace_engine_sum_q1e5("rowl_i", dsq, dsq_offset, l, m, q, &row, 2, 0, q);
-        }
-        "rowlm1" => {
-            trace_engine_sum_q1e5("rowlm1_m", dsq, dsq_offset, l, m, q, &row, 0, 0, q);
-            trace_engine_sum_q1e5("rowlm1_d", dsq, dsq_offset, l, m, q, &row, 1, 0, q);
-            trace_engine_sum_q1e5("rowlm1_i", dsq, dsq_offset, l, m, q, &row, 2, 0, q);
-        }
-        "rowlm2" => {
-            trace_engine_sum_q1e5("rowlm2_m", dsq, dsq_offset, l, m, q, &row, 0, 0, q);
-            trace_engine_sum_q1e5("rowlm2_d", dsq, dsq_offset, l, m, q, &row, 1, 0, q);
-            trace_engine_sum_q1e5("rowlm2_i", dsq, dsq_offset, l, m, q, &row, 2, 0, q);
-        }
-        "rowlm4" => {
-            trace_engine_sum_q1e5("rowlm4_m", dsq, dsq_offset, l, m, q, &row, 0, 0, q);
-            trace_engine_sum_q1e5("rowlm4_d", dsq, dsq_offset, l, m, q, &row, 1, 0, q);
-            trace_engine_sum_q1e5("rowlm4_i", dsq, dsq_offset, l, m, q, &row, 2, 0, q);
-        }
-        "rowlm8" => {
-            trace_engine_sum_q1e5("rowlm8_m", dsq, dsq_offset, l, m, q, &row, 0, 0, q);
-            trace_engine_sum_q1e5("rowlm8_d", dsq, dsq_offset, l, m, q, &row, 1, 0, q);
-            trace_engine_sum_q1e5("rowlm8_i", dsq, dsq_offset, l, m, q, &row, 2, 0, q);
-        }
-        "rowlm16" => {
-            trace_engine_sum_q1e5("rowlm16_m", dsq, dsq_offset, l, m, q, &row, 0, 0, q);
-            trace_engine_sum_q1e5("rowlm16_d", dsq, dsq_offset, l, m, q, &row, 1, 0, q);
-            trace_engine_sum_q1e5("rowlm16_i", dsq, dsq_offset, l, m, q, &row, 2, 0, q);
-        }
-        "rowlm32" => {
-            trace_engine_sum_q1e5("rowlm32_m", dsq, dsq_offset, l, m, q, &row, 0, 0, q);
-            trace_engine_sum_q1e5("rowlm32_d", dsq, dsq_offset, l, m, q, &row, 1, 0, q);
-            trace_engine_sum_q1e5("rowlm32_i", dsq, dsq_offset, l, m, q, &row, 2, 0, q);
-        }
-        "rowlm64" => {
-            trace_engine_sum_q1e5("rowlm64_m", dsq, dsq_offset, l, m, q, &row, 0, 0, q);
-            trace_engine_sum_q1e5("rowlm64_d", dsq, dsq_offset, l, m, q, &row, 1, 0, q);
-            trace_engine_sum_q1e5("rowlm64_i", dsq, dsq_offset, l, m, q, &row, 2, 0, q);
-        }
-        "rowlm128" => {
-            trace_engine_sum_q1e5("rowlm128_m", dsq, dsq_offset, l, m, q, &row, 0, 0, q);
-            trace_engine_sum_q1e5("rowlm128_d", dsq, dsq_offset, l, m, q, &row, 1, 0, q);
-            trace_engine_sum_q1e5("rowlm128_i", dsq, dsq_offset, l, m, q, &row, 2, 0, q);
-        }
-        label => {
-            let m_name = match label {
-                "row128" => "row128_m",
-                "row64" => "row64_m",
-                "row32" => "row32_m",
-                "row16" => "row16_m",
-                "row8" => "row8_m",
-                "row4" => "row4_m",
-                _ => "row2_m",
-            };
-            let d_name = match label {
-                "row128" => "row128_d",
-                "row64" => "row64_d",
-                "row32" => "row32_d",
-                "row16" => "row16_d",
-                "row8" => "row8_d",
-                "row4" => "row4_d",
-                _ => "row2_d",
-            };
-            let i_name = match label {
-                "row128" => "row128_i",
-                "row64" => "row64_i",
-                "row32" => "row32_i",
-                "row16" => "row16_i",
-                "row8" => "row8_i",
-                "row4" => "row4_i",
-                _ => "row2_i",
-            };
-            trace_engine_sum_q1e5(m_name, dsq, dsq_offset, l, m, q, &row, 0, 0, q);
-            trace_engine_sum_q1e5(d_name, dsq, dsq_offset, l, m, q, &row, 1, 0, q);
-            trace_engine_sum_q1e5(i_name, dsq, dsq_offset, l, m, q, &row, 2, 0, q);
-        }
-    }
-}
-
-/// Tracehash helper: hash row 1 with extra coarse partitions over the model length.
-///
-/// Emits the standard M/D/I sums plus stripe-window sums (`q0_8`, `q8_16`, `q16_32`,
-/// `q32_end`) so tracehash regressions can localize divergences along the profile.
-#[cfg(all(feature = "tracehash", target_arch = "x86_64"))]
-unsafe fn trace_engine_row1_q1e5(
-    dsq: &[Dsq],
-    dsq_offset: usize,
-    l: usize,
-    m: usize,
-    q: usize,
-    dpc_buf: &[__m128],
-) {
-    let mut row = Vec::with_capacity(dpc_buf.len());
-    for v in dpc_buf {
-        let mut lanes = [0.0_f32; 4];
-        _mm_storeu_ps(lanes.as_mut_ptr(), *v);
-        row.push(lanes);
-    }
-    trace_engine_sum_q1e5("m", dsq, dsq_offset, l, m, q, &row, 0, 0, q);
-    trace_engine_sum_q1e5("d", dsq, dsq_offset, l, m, q, &row, 1, 0, q);
-    trace_engine_sum_q1e5("i", dsq, dsq_offset, l, m, q, &row, 2, 0, q);
-    trace_engine_sum_q1e5("m_q0_8", dsq, dsq_offset, l, m, q, &row, 0, 0, 8);
-    trace_engine_sum_q1e5("m_q8_16", dsq, dsq_offset, l, m, q, &row, 0, 8, 16);
-    trace_engine_sum_q1e5("m_q16_32", dsq, dsq_offset, l, m, q, &row, 0, 16, 32);
-    trace_engine_sum_q1e5("m_q32_end", dsq, dsq_offset, l, m, q, &row, 0, 32, q);
-}
-
-/// Tracehash helper: hash row 1 at a mid-recursion phase checkpoint.
-///
-/// Phases `phase1`/`phase3`/`phase4`/`phase5` correspond to the M/I-init, E->M+DD,
-/// post-DD, and M->D stages inside the Backward inner loop.
-#[cfg(all(feature = "tracehash", target_arch = "x86_64"))]
-unsafe fn trace_engine_row1_checkpoint_q1e5(
-    label: &'static str,
-    dsq: &[Dsq],
-    dsq_offset: usize,
-    l: usize,
-    m: usize,
-    q: usize,
-    dpc_buf: &[__m128],
-) {
-    let mut row = Vec::with_capacity(dpc_buf.len());
-    for v in dpc_buf {
-        let mut lanes = [0.0_f32; 4];
-        _mm_storeu_ps(lanes.as_mut_ptr(), *v);
-        row.push(lanes);
-    }
-
-    match label {
-        "phase1" => {
-            trace_engine_sum_q1e5("phase1_m", dsq, dsq_offset, l, m, q, &row, 0, 0, q);
-            trace_engine_sum_q1e5("phase1_d", dsq, dsq_offset, l, m, q, &row, 1, 0, q);
-            trace_engine_sum_q1e5("phase1_i", dsq, dsq_offset, l, m, q, &row, 2, 0, q);
-        }
-        "phase3" => {
-            trace_engine_sum_q1e5("phase3_m", dsq, dsq_offset, l, m, q, &row, 0, 0, q);
-            trace_engine_sum_q1e5("phase3_d", dsq, dsq_offset, l, m, q, &row, 1, 0, q);
-        }
-        "phase4" => {
-            trace_engine_sum_q1e5("phase4_d", dsq, dsq_offset, l, m, q, &row, 1, 0, q);
-        }
-        _ => {
-            trace_engine_sum_q1e5("phase5_m", dsq, dsq_offset, l, m, q, &row, 0, 0, q);
-        }
-    }
-}
-
 /// The Backward algorithm, linear-memory parsing version (SSE, probability space).
 ///
 /// Variant of C `p7_BackwardParser` — same as `p7_Backward` except the full DP
@@ -413,7 +143,7 @@ pub unsafe fn backward_parser_pmx_offset_with_scratch(
     // only the filled `xmx` specials and `row_scale`, which are computed exactly
     // as in C. The per-row `pmx.scale[i]` is deliberately left 0.0 in that path
     // because cancellation runs through `row_scale` instead.
-    let track_scales = cfg!(feature = "tracehash") || fwd_row_scales.is_none();
+    let track_scales = fwd_row_scales.is_none();
     let mut has_own_scales = fwd_row_scales.is_none();
     // Initialize row L: M(L,k)->E->C->T and D(L,k)->E->C->T
     {
@@ -491,9 +221,6 @@ pub unsafe fn backward_parser_pmx_offset_with_scratch(
     pmx.scale[l] = if track_scales { totscale } else { 0.0 };
     pmx.row_scale[l] = row_scale_l;
 
-    #[cfg(feature = "tracehash")]
-    trace_engine_row_final_q1e5("rowl", dsq, dsq_offset, l, om.m, q, &dpp_buf);
-
     // Main recursion: i = L-1 down to 1
     for i in (1..l).rev() {
         let xi_next = dsq[dsq_offset + i + 1] as usize;
@@ -540,11 +267,6 @@ pub unsafe fn backward_parser_pmx_offset_with_scratch(
             tmmv = load_tfv(om, qi, 1);
         }
 
-        #[cfg(feature = "tracehash")]
-        if i == 1 {
-            trace_engine_row1_checkpoint_q1e5("phase1", dsq, dsq_offset, l, om.m, q, &dpc_buf);
-        }
-
         // Horizontal sum xBv -> xB
         x_bv = _mm_add_ps(
             x_bv,
@@ -578,11 +300,6 @@ pub unsafe fn backward_parser_pmx_offset_with_scratch(
                 *m_ptr = _mm_add_ps(*m_ptr, x_ev);
             }
 
-            #[cfg(feature = "tracehash")]
-            if i == 1 {
-                trace_engine_row1_checkpoint_q1e5("phase3", dsq, dsq_offset, l, om.m, q, &dpc_buf);
-            }
-
             // 3 more D->D passes for convergence
             for _ in 0..3 {
                 dcv = _mm_castsi128_ps(_mm_srli_si128::<4>(_mm_castps_si128(dcv)));
@@ -592,11 +309,6 @@ pub unsafe fn backward_parser_pmx_offset_with_scratch(
                     let d_ptr = dpc.add(qi * 3 + 1);
                     *d_ptr = _mm_add_ps(*d_ptr, dcv);
                 }
-            }
-
-            #[cfg(feature = "tracehash")]
-            if i == 1 {
-                trace_engine_row1_checkpoint_q1e5("phase4", dsq, dsq_offset, l, om.m, q, &dpc_buf);
             }
         }
 
@@ -608,11 +320,6 @@ pub unsafe fn backward_parser_pmx_offset_with_scratch(
                 let m_ptr = dpc.add(qi * 3);
                 *m_ptr = _mm_add_ps(*m_ptr, _mm_mul_ps(dcv, tmd));
                 dcv = *dpc.add(qi * 3 + 1);
-            }
-
-            #[cfg(feature = "tracehash")]
-            if i == 1 {
-                trace_engine_row1_checkpoint_q1e5("phase5", dsq, dsq_offset, l, om.m, q, &dpc_buf);
             }
         }
 
@@ -663,71 +370,6 @@ pub unsafe fn backward_parser_pmx_offset_with_scratch(
         pmx.set_xmx(i, PXC, x_c);
         pmx.scale[i] = if track_scales { totscale } else { 0.0 };
         pmx.row_scale[i] = row_scale;
-
-        #[cfg(feature = "tracehash")]
-        if i == 1 {
-            trace_engine_row1_q1e5(dsq, dsq_offset, l, om.m, q, &dpc_buf);
-        }
-        #[cfg(feature = "tracehash")]
-        if i == 2 {
-            trace_engine_row_final_q1e5("row2", dsq, dsq_offset, l, om.m, q, &dpc_buf);
-        }
-        #[cfg(feature = "tracehash")]
-        if i + 1 == l {
-            trace_engine_row_final_q1e5("rowlm1", dsq, dsq_offset, l, om.m, q, &dpc_buf);
-        }
-        #[cfg(feature = "tracehash")]
-        if i + 2 == l {
-            trace_engine_row_final_q1e5("rowlm2", dsq, dsq_offset, l, om.m, q, &dpc_buf);
-        }
-        #[cfg(feature = "tracehash")]
-        if i + 4 == l {
-            trace_engine_row_final_q1e5("rowlm4", dsq, dsq_offset, l, om.m, q, &dpc_buf);
-        }
-        #[cfg(feature = "tracehash")]
-        if i + 8 == l {
-            trace_engine_row_final_q1e5("rowlm8", dsq, dsq_offset, l, om.m, q, &dpc_buf);
-        }
-        #[cfg(feature = "tracehash")]
-        if i + 16 == l {
-            trace_engine_row_final_q1e5("rowlm16", dsq, dsq_offset, l, om.m, q, &dpc_buf);
-        }
-        #[cfg(feature = "tracehash")]
-        if i + 32 == l {
-            trace_engine_row_final_q1e5("rowlm32", dsq, dsq_offset, l, om.m, q, &dpc_buf);
-        }
-        #[cfg(feature = "tracehash")]
-        if i + 64 == l {
-            trace_engine_row_final_q1e5("rowlm64", dsq, dsq_offset, l, om.m, q, &dpc_buf);
-        }
-        #[cfg(feature = "tracehash")]
-        if i + 128 == l {
-            trace_engine_row_final_q1e5("rowlm128", dsq, dsq_offset, l, om.m, q, &dpc_buf);
-        }
-        #[cfg(feature = "tracehash")]
-        if i == 4 {
-            trace_engine_row_final_q1e5("row4", dsq, dsq_offset, l, om.m, q, &dpc_buf);
-        }
-        #[cfg(feature = "tracehash")]
-        if i == 8 {
-            trace_engine_row_final_q1e5("row8", dsq, dsq_offset, l, om.m, q, &dpc_buf);
-        }
-        #[cfg(feature = "tracehash")]
-        if i == 16 {
-            trace_engine_row_final_q1e5("row16", dsq, dsq_offset, l, om.m, q, &dpc_buf);
-        }
-        #[cfg(feature = "tracehash")]
-        if i == 32 {
-            trace_engine_row_final_q1e5("row32", dsq, dsq_offset, l, om.m, q, &dpc_buf);
-        }
-        #[cfg(feature = "tracehash")]
-        if i == 64 {
-            trace_engine_row_final_q1e5("row64", dsq, dsq_offset, l, om.m, q, &dpc_buf);
-        }
-        #[cfg(feature = "tracehash")]
-        if i == 128 {
-            trace_engine_row_final_q1e5("row128", dsq, dsq_offset, l, om.m, q, &dpc_buf);
-        }
 
         std::mem::swap(dpp_buf, dpc_buf);
     }
@@ -816,7 +458,7 @@ pub(crate) unsafe fn backward_parser_pmx_offset_direct(
     let mut x_b: f32 = 0.0;
     let mut x_n: f32 = 0.0;
     let mut totscale: f64 = 0.0;
-    let track_scales = cfg!(feature = "tracehash") || fwd_row_scales.is_none();
+    let track_scales = fwd_row_scales.is_none();
     let mut has_own_scales = fwd_row_scales.is_none();
 
     #[inline(always)]

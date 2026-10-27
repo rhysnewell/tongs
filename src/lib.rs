@@ -6,10 +6,10 @@
 //! # Quick Start
 //!
 //! ```no_run
-//! use hmmer_pure_rs::{Alphabet, Bg, Hmm, Profile, Pipeline, TopHits, OProfile};
-//! use hmmer_pure_rs::hmmfile;
-//! use hmmer_pure_rs::profile::{profile_config, reconfig_length, P7_LOCAL};
-//! use hmmer_pure_rs::sequence::Sequence;
+//! use tongs::{Alphabet, Bg, Hmm, Profile, Pipeline, TopHits, OProfile};
+//! use tongs::hmmfile;
+//! use tongs::profile::{profile_config, reconfig_length, P7_LOCAL};
+//! use tongs::sequence::Sequence;
 //! use std::path::Path;
 //!
 //! // Load an HMM
@@ -46,8 +46,8 @@
 #![allow(non_snake_case)]
 
 // Let the crate refer to itself by name, so the CLI subcommand modules (moved
-// in from the binary) can keep using their existing `hmmer_pure_rs::` paths.
-extern crate self as hmmer_pure_rs;
+// in from the binary) can keep using their existing `tongs::` paths.
+extern crate self as tongs;
 
 pub mod alphabet;
 pub mod bg;

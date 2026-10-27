@@ -8,20 +8,6 @@ use crate::bg::Bg;
 use crate::hmm::*;
 use crate::util::cmath::{c_log_f32_to_f32, c_log_f64, c_log_to_f32, ESL_CONST_LOG2};
 
-/// Tracehash hook: record the per-node B→Mk entry-score derivation so it can
-/// be diff'd against the C reference. Active only under the `tracehash` feature.
-#[cfg(feature = "tracehash")]
-fn trace_profile_entry_source(m: usize, k: usize, occ: f32, z: f32, ratio: f32, score: f32) {
-    let mut th = tracehash::th_call!("profile_entry_source_bits");
-    th.input_usize(m);
-    th.input_usize(k);
-    th.output_u64(occ.to_bits() as u64);
-    th.output_u64(z.to_bits() as u64);
-    th.output_u64(ratio.to_bits() as u64);
-    th.output_u64(score.to_bits() as u64);
-    th.finish();
-}
-
 // Profile transition indices (different ordering from HMM transitions)
 pub const P7P_MM: usize = 0;
 pub const P7P_IM: usize = 1;
@@ -293,8 +279,6 @@ pub fn profile_config(hmm: &Hmm, bg: &Bg, gm: &mut Profile, l: i32, mode: i32) {
         for k in 1..=hmm.m {
             let ratio = occ[k] / z;
             let score = c_log_f32_to_f32(ratio);
-            #[cfg(feature = "tracehash")]
-            trace_profile_entry_source(hmm.m, k, occ[k], z, ratio, score);
             gm.set_tsc(k - 1, P7P_BM, score);
         }
     } else {

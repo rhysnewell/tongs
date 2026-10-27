@@ -352,80 +352,6 @@ impl ProbMx {
     pub fn q_count(&self) -> usize {
         self.q
     }
-
-    /// Sum the lanes of `state` at row `i` over only the `k <= M` cells.
-    /// Tracehash-only helper used to diff striped rows against the C output.
-    #[cfg(all(feature = "tracehash", target_arch = "x86_64"))]
-    pub fn striped_row_state_sum(&self, i: usize, state: usize) -> f32 {
-        let mut sum = 0.0_f32;
-        let row_base = self.striped_dp_offset + i * self.striped_row_width;
-        for qi in 0..self.q {
-            let off = row_base + qi * DP_CELLS_PER_K * 4 + state * 4;
-            for lane in 0..4 {
-                let k = qi + 1 + lane * self.q;
-                if k <= self.m {
-                    sum += self.striped_dp[off + lane];
-                }
-            }
-        }
-        sum
-    }
-
-    /// Sum every lane (including padding past `M`) of `state` at row `i`.
-    /// Tracehash-only.
-    #[cfg(all(feature = "tracehash", target_arch = "x86_64"))]
-    pub fn striped_row_state_sum_all_lanes(&self, i: usize, state: usize) -> f32 {
-        let mut sum = 0.0_f32;
-        let row_base = self.striped_dp_offset + i * self.striped_row_width;
-        for qi in 0..self.q {
-            let off = row_base + qi * DP_CELLS_PER_K * 4 + state * 4;
-            for lane in 0..4 {
-                sum += self.striped_dp[off + lane];
-            }
-        }
-        sum
-    }
-
-    /// Return the 4-lane stripe `(qi, state)` at row `i` as a plain array.
-    /// Tracehash-only.
-    #[cfg(all(feature = "tracehash", target_arch = "x86_64"))]
-    pub fn striped_row_state_vector(&self, i: usize, state: usize, qi: usize) -> [f32; 4] {
-        let off = self.striped_dp_offset
-            + i * self.striped_row_width
-            + qi * DP_CELLS_PER_K * 4
-            + state * 4;
-        [
-            self.striped_dp[off],
-            self.striped_dp[off + 1],
-            self.striped_dp[off + 2],
-            self.striped_dp[off + 3],
-        ]
-    }
-
-    /// Sum `state` lanes over a stripe range `[q_start, q_end)` at row `i`,
-    /// keeping only `k <= M` cells. Tracehash-only.
-    #[cfg(all(feature = "tracehash", target_arch = "x86_64"))]
-    pub fn striped_row_state_q_range_sum(
-        &self,
-        i: usize,
-        state: usize,
-        q_start: usize,
-        q_end: usize,
-    ) -> f32 {
-        let mut sum = 0.0_f32;
-        let row_base = self.striped_dp_offset + i * self.striped_row_width;
-        let q_end = q_end.min(self.q);
-        for qi in q_start.min(self.q)..q_end {
-            let off = row_base + qi * DP_CELLS_PER_K * 4 + state * 4;
-            for lane in 0..4 {
-                let k = qi + 1 + lane * self.q;
-                if k <= self.m {
-                    sum += self.striped_dp[off + lane];
-                }
-            }
-        }
-        sum
-    }
 }
 
 /// Posterior decoding of domain location from parser-mode Fwd/Bck.
@@ -462,7 +388,6 @@ pub fn p_domain_decoding_reuse(
     etot: &mut Vec<f32>,
     mocc: &mut Vec<f32>,
 ) {
-    #[cfg(not(feature = "tracehash"))]
     let _ = m;
     let n_loop = njc_loop[0];
     let j_loop = njc_loop[1];
@@ -483,8 +408,6 @@ pub fn p_domain_decoding_reuse(
     mocc[0] = 0.0;
 
     for i in 1..=l {
-        #[cfg(feature = "tracehash")]
-        let scale_before = scaleproduct;
         btot[i] = btot[i - 1];
         let mut b = fwd.xmx(i - 1, PXB);
         b *= bck.xmx(i - 1, PXB);
@@ -495,8 +418,6 @@ pub fn p_domain_decoding_reuse(
         if bck.has_own_scales {
             scaleproduct *= fwd.row_scale[i - 1] / bck.row_scale[i - 1];
         }
-        #[cfg(feature = "tracehash")]
-        let scale_after = scaleproduct;
 
         etot[i] = etot[i - 1];
         let mut e = fwd.xmx(i, PXE);
@@ -522,29 +443,6 @@ pub fn p_domain_decoding_reuse(
         term *= scaleproduct;
         njcp += term;
         mocc[i] = (1.0_f64 - njcp as f64) as f32;
-
-        #[cfg(feature = "tracehash")]
-        if i <= 8 || i == l {
-            let mut th = tracehash::th_call!("domain_decoding_step_bits");
-            th.input_usize(l);
-            th.input_usize(m);
-            th.input_usize(i);
-            th.output_f32(fwd.xmx(i - 1, PXB));
-            th.output_f32(bck.xmx(i - 1, PXB));
-            th.output_f32(fwd.row_scale[i - 1]);
-            th.output_f32(scale_before);
-            th.output_f32(b);
-            th.output_f32(btot[i]);
-            th.output_f32(scale_after);
-            th.output_f32(fwd.xmx(i, PXE));
-            th.output_f32(bck.xmx(i, PXE));
-            th.output_f32(fwd.row_scale[i]);
-            th.output_f32(e);
-            th.output_f32(etot[i]);
-            th.output_f32(njcp);
-            th.output_f32(mocc[i]);
-            th.finish();
-        }
     }
 }
 

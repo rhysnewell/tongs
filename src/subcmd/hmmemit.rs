@@ -8,18 +8,18 @@ use std::path::PathBuf;
 
 use clap::{ArgAction, FromArgMatches, Parser};
 
-use hmmer_pure_rs::alphabet::{Alphabet, Dsq, DSQ_SENTINEL};
-use hmmer_pure_rs::bg::Bg;
-use hmmer_pure_rs::hmm::{Hmm, DD, DM, II, IM, MD, MM};
-use hmmer_pure_rs::hmmfile;
-use hmmer_pure_rs::profile::{
+use tongs::alphabet::{Alphabet, Dsq, DSQ_SENTINEL};
+use tongs::bg::Bg;
+use tongs::hmm::{Hmm, DD, DM, II, IM, MD, MM};
+use tongs::hmmfile;
+use tongs::profile::{
     profile_config, Profile, P7P_BM, P7P_C, P7P_E, P7P_J, P7P_LOOP, P7P_MOVE, P7P_N, P7_GLOCAL,
     P7_LOCAL, P7_UNIGLOCAL, P7_UNILOCAL,
 };
-use hmmer_pure_rs::sequence::Sequence;
-use hmmer_pure_rs::trace::{State, Trace};
-use hmmer_pure_rs::util::cmath::c_exp_to_f32;
-use hmmer_pure_rs::util::random::MersenneTwister;
+use tongs::sequence::Sequence;
+use tongs::trace::{State, Trace};
+use tongs::util::cmath::c_exp_to_f32;
+use tongs::util::random::MersenneTwister;
 
 /// Easel's interleaved Stockholm writer wraps residues at this column count
 /// (`stockholm_write(fp, msa, 200)` for `eslMSAFILE_STOCKHOLM`,
@@ -234,7 +234,7 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
     std::process::ExitCode::SUCCESS
 }
 
-fn read_hmms_maybe_stdin(path: &std::path::Path) -> hmmer_pure_rs::errors::HmmerResult<Vec<Hmm>> {
+fn read_hmms_maybe_stdin(path: &std::path::Path) -> tongs::errors::HmmerResult<Vec<Hmm>> {
     if path == std::path::Path::new("-") {
         let stdin = std::io::stdin();
         hmmfile::read_hmms_auto(BufReader::new(stdin.lock()))
@@ -818,7 +818,7 @@ mod tests {
 
     #[test]
     fn simple_consensus_uses_masked_unknown_code() {
-        let mut hmm = Hmm::new(2, hmmer_pure_rs::alphabet::AlphabetType::Amino, 20);
+        let mut hmm = Hmm::new(2, tongs::alphabet::AlphabetType::Amino, 20);
         hmm.name = "x".to_string();
         hmm.mat[1][0] = 1.0;
         hmm.mat[2][1] = 1.0;
@@ -829,7 +829,7 @@ mod tests {
 
     #[test]
     fn fancy_consensus_applies_thresholds_and_case() {
-        let mut hmm = Hmm::new(3, hmmer_pure_rs::alphabet::AlphabetType::Amino, 20);
+        let mut hmm = Hmm::new(3, tongs::alphabet::AlphabetType::Amino, 20);
         hmm.mat[1][0] = 0.2;
         hmm.mat[2][1] = 0.5;
         hmm.mat[3][2] = 0.9;
@@ -839,7 +839,7 @@ mod tests {
 
     #[test]
     fn core_alignment_renders_stockholm_shape() {
-        let mut hmm = Hmm::new(2, hmmer_pure_rs::alphabet::AlphabetType::Amino, 20);
+        let mut hmm = Hmm::new(2, tongs::alphabet::AlphabetType::Amino, 20);
         hmm.t[0][MM] = 1.0;
         hmm.t[1][MM] = 1.0;
         hmm.t[2][MM] = 1.0;

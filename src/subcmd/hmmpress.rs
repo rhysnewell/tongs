@@ -7,15 +7,15 @@ use std::io::{BufWriter, Seek};
 use std::path::PathBuf;
 
 use clap::{ArgAction, Parser};
-use hmmer_pure_rs::alphabet::Alphabet;
-use hmmer_pure_rs::bg::Bg;
-use hmmer_pure_rs::errors::{HmmerError, HmmerResult};
-use hmmer_pure_rs::hmmfile;
-use hmmer_pure_rs::hmmfile_binary::write_binary_hmm;
-use hmmer_pure_rs::pressed::{write_h3f_record, write_h3p_record};
-use hmmer_pure_rs::profile::{self, Profile, P7_LOCAL};
-use hmmer_pure_rs::simd::oprofile::OProfile;
-use hmmer_pure_rs::ssi;
+use tongs::alphabet::Alphabet;
+use tongs::bg::Bg;
+use tongs::errors::{HmmerError, HmmerResult};
+use tongs::hmmfile;
+use tongs::hmmfile_binary::write_binary_hmm;
+use tongs::pressed::{write_h3f_record, write_h3p_record};
+use tongs::profile::{self, Profile, P7_LOCAL};
+use tongs::simd::oprofile::OProfile;
+use tongs::ssi;
 
 #[derive(Parser)]
 #[command(
@@ -196,7 +196,7 @@ fn press_database(args: &Args) -> HmmerResult<PressSummary> {
     })
 }
 
-fn prevalidate_index_keys(hmms: &[hmmer_pure_rs::Hmm]) -> HmmerResult<()> {
+fn prevalidate_index_keys(hmms: &[tongs::Hmm]) -> HmmerResult<()> {
     let mut keys = HashSet::new();
     for (idx, hmm) in hmms.iter().enumerate() {
         if hmm.name.is_empty() {

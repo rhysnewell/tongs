@@ -3,7 +3,7 @@ use std::fs::File;
 use std::io::BufWriter;
 use std::path::PathBuf;
 
-use hmmer_pure_rs::hmmfile_binary::{read_binary_hmm_file, write_binary_hmm};
+use tongs::hmmfile_binary::{read_binary_hmm_file, write_binary_hmm};
 
 fn main() {
     let mut args = std::env::args().skip(1);

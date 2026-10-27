@@ -5,12 +5,12 @@ use std::path::PathBuf;
 
 use clap::Parser;
 
-use hmmer_pure_rs::alphabet::Alphabet;
-use hmmer_pure_rs::bg::Bg;
-use hmmer_pure_rs::hmm::{DM, IM, MI, MM};
-use hmmer_pure_rs::hmmfile;
-use hmmer_pure_rs::profile;
-use hmmer_pure_rs::util::cmath::{c_log_f64, ESL_CONST_LOG2, ESL_CONST_LOG2R};
+use tongs::alphabet::Alphabet;
+use tongs::bg::Bg;
+use tongs::hmm::{DM, IM, MI, MM};
+use tongs::hmmfile;
+use tongs::profile;
+use tongs::util::cmath::{c_log_f64, ESL_CONST_LOG2, ESL_CONST_LOG2R};
 
 #[derive(Parser)]
 #[command(name = "hmmstat", about = "Display summary statistics for each HMM")]
@@ -94,9 +94,7 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
     std::process::ExitCode::SUCCESS
 }
 
-fn read_hmms_maybe_stdin(
-    path: &std::path::Path,
-) -> hmmer_pure_rs::errors::HmmerResult<Vec<hmmer_pure_rs::Hmm>> {
+fn read_hmms_maybe_stdin(path: &std::path::Path) -> tongs::errors::HmmerResult<Vec<tongs::Hmm>> {
     if path == std::path::Path::new("-") {
         let stdin = std::io::stdin();
         hmmfile::read_hmms_auto(BufReader::new(stdin.lock()))
@@ -126,18 +124,18 @@ fn write_stat_row<W: Write>(
         name,
         acc,
         nseq,
-        hmmer_pure_rs::output::fmt_width8_2(eff_nseq as f64),
+        tongs::output::fmt_width8_2(eff_nseq as f64),
         m,
-        hmmer_pure_rs::output::fmt_width6_2(relent as f64),
-        hmmer_pure_rs::output::fmt_width6_2(info as f64),
-        hmmer_pure_rs::output::fmt_width6_2(p_rele as f64),
-        hmmer_pure_rs::output::fmt_width6_2(comp_kl as f64)
+        tongs::output::fmt_width6_2(relent as f64),
+        tongs::output::fmt_width6_2(info as f64),
+        tongs::output::fmt_width6_2(p_rele as f64),
+        tongs::output::fmt_width6_2(comp_kl as f64)
     )
     .unwrap();
 }
 
 /// Mean relative entropy per match emission.
-fn mean_match_relative_entropy(h: &hmmer_pure_rs::Hmm, bg: &Bg) -> f32 {
+fn mean_match_relative_entropy(h: &tongs::Hmm, bg: &Bg) -> f32 {
     let k = h.abc_k;
     let mut sum = 0.0_f32;
     for node in 1..=h.m {
@@ -152,7 +150,7 @@ fn mean_match_relative_entropy(h: &hmmer_pure_rs::Hmm, bg: &Bg) -> f32 {
 }
 
 /// Mean information content per match emission.
-fn mean_match_info(h: &hmmer_pure_rs::Hmm, bg: &Bg) -> f32 {
+fn mean_match_info(h: &tongs::Hmm, bg: &Bg) -> f32 {
     let k = h.abc_k;
     let mut sum = 0.0_f32;
     for node in 1..=h.m {
@@ -175,7 +173,7 @@ fn mean_match_info(h: &hmmer_pure_rs::Hmm, bg: &Bg) -> f32 {
 }
 
 /// Mean position-wise relative entropy.
-fn mean_position_relative_entropy(h: &hmmer_pure_rs::Hmm, bg: &Bg) -> f32 {
+fn mean_position_relative_entropy(h: &tongs::Hmm, bg: &Bg) -> f32 {
     let mocc = profile::hmm_calculate_occupancy(h);
     let occ_sum: f32 = mocc[1..=h.m].iter().sum();
     if occ_sum <= 0.0 {
@@ -217,7 +215,7 @@ fn mean_position_relative_entropy(h: &hmmer_pure_rs::Hmm, bg: &Bg) -> f32 {
 }
 
 /// KL divergence between model composition and background.
-fn composition_kld(h: &hmmer_pure_rs::Hmm, bg: &Bg) -> f32 {
+fn composition_kld(h: &tongs::Hmm, bg: &Bg) -> f32 {
     let mocc = profile::hmm_calculate_occupancy(h);
     let mut avg = vec![0.0_f32; h.abc_k];
     for (node, &occ) in mocc.iter().enumerate().take(h.m + 1).skip(1) {
@@ -294,9 +292,9 @@ fn safe_ln_ratio(p: f64, q: f64) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use hmmer_pure_rs::alphabet::AlphabetType;
-    use hmmer_pure_rs::hmm::{DD, II, MD};
-    use hmmer_pure_rs::Hmm;
+    use tongs::alphabet::AlphabetType;
+    use tongs::hmm::{DD, II, MD};
+    use tongs::Hmm;
 
     fn two_node_hmm() -> Hmm {
         let mut h = Hmm::new(2, AlphabetType::Amino, 20);

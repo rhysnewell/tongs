@@ -5,17 +5,17 @@ use std::path::PathBuf;
 
 use clap::{ArgAction, Parser};
 
-use hmmer_pure_rs::alphabet::{Alphabet, AlphabetType};
-use hmmer_pure_rs::bg::Bg;
-use hmmer_pure_rs::builder;
-use hmmer_pure_rs::builder::Builder;
-use hmmer_pure_rs::calibrate::CalibrationConfig;
-use hmmer_pure_rs::hmmfile;
-use hmmer_pure_rs::msa;
-use hmmer_pure_rs::output::{fmt_fixed3, fmt_width6_3, fmt_width8_2};
-use hmmer_pure_rs::prior::PriorStrategy;
-use hmmer_pure_rs::seqmodel;
-use hmmer_pure_rs::util::cmath::{c_log_f64, ESL_CONST_LOG2R};
+use tongs::alphabet::{Alphabet, AlphabetType};
+use tongs::bg::Bg;
+use tongs::builder;
+use tongs::builder::Builder;
+use tongs::calibrate::CalibrationConfig;
+use tongs::hmmfile;
+use tongs::msa;
+use tongs::output::{fmt_fixed3, fmt_width6_3, fmt_width8_2};
+use tongs::prior::PriorStrategy;
+use tongs::seqmodel;
+use tongs::util::cmath::{c_log_f64, ESL_CONST_LOG2R};
 
 #[derive(Parser)]
 #[command(
@@ -942,7 +942,7 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
                 popen_was_requested.then_some(args.popen),
                 pextend_was_requested.then_some(args.pextend),
             );
-            if let Err(e) = hmmer_pure_rs::calibrate::calibrate_with_config(
+            if let Err(e) = tongs::calibrate::calibrate_with_config(
                 &mut hmm,
                 &abc,
                 &bg,
@@ -1013,7 +1013,7 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
 fn read_build_alignments_maybe_stdin(
     path: &std::path::Path,
     format: Option<&str>,
-) -> hmmer_pure_rs::errors::HmmerResult<Vec<BuildAlignment>> {
+) -> tongs::errors::HmmerResult<Vec<BuildAlignment>> {
     if format.is_some_and(is_a2m_msa_format) {
         let msas = if path == std::path::Path::new("-") {
             let stdin = std::io::stdin();
@@ -1228,17 +1228,17 @@ fn build_single_sequence_hmm(
     popen: f64,
     pextend: f64,
     seed: u32,
-    calibration: hmmer_pure_rs::calibrate::CalibrationConfig,
+    calibration: tongs::calibrate::CalibrationConfig,
     w_length: Option<usize>,
     w_beta: Option<f64>,
-) -> hmmer_pure_rs::Hmm {
-    let mut dsq = vec![hmmer_pure_rs::alphabet::DSQ_SENTINEL];
+) -> tongs::Hmm {
+    let mut dsq = vec![tongs::alphabet::DSQ_SENTINEL];
     for &sym in &msa.aseq[0] {
         if matches!(sym, b'-' | b'.' | b'_' | b'~') || sym.is_ascii_whitespace() {
             continue;
         }
         let code = abc.digitize_symbol(sym);
-        if code == hmmer_pure_rs::alphabet::DSQ_IGNORED || !abc.is_residue(code) {
+        if code == tongs::alphabet::DSQ_IGNORED || !abc.is_residue(code) {
             eprintln!(
                 "Error: hmmbuild --singlemx sequence contains non-residue '{}'",
                 sym as char
@@ -1251,7 +1251,7 @@ fn build_single_sequence_hmm(
         eprintln!("Error: hmmbuild --singlemx requires at least one residue");
         std::process::exit(1);
     }
-    dsq.push(hmmer_pure_rs::alphabet::DSQ_SENTINEL);
+    dsq.push(tongs::alphabet::DSQ_SENTINEL);
     let name = msa.sqname[0].as_str();
     let mut builder = Builder::new(abc.abc_type)
         .with_seed(seed)
@@ -1273,17 +1273,17 @@ fn build_single_sequence_hmm(
     hmm.eff_nseq = 1.0;
     if let Some(ref acc) = msa.acc {
         hmm.acc = Some(acc.clone());
-        hmm.flags |= hmmer_pure_rs::hmm::P7H_ACC;
+        hmm.flags |= tongs::hmm::P7H_ACC;
     }
     if let Some(ref desc) = msa.desc {
         hmm.desc = Some(desc.clone());
-        hmm.flags |= hmmer_pure_rs::hmm::P7H_DESC;
+        hmm.flags |= tongs::hmm::P7H_DESC;
     }
     hmm
 }
 
 fn apply_window_length_options(
-    hmm: &mut hmmer_pure_rs::Hmm,
+    hmm: &mut tongs::Hmm,
     alphabet_type: AlphabetType,
     w_length: Option<usize>,
     w_beta: Option<f64>,
@@ -1302,8 +1302,8 @@ fn apply_window_length_options(
     }
 }
 
-fn apply_fixed_gap_params(hmm: &mut hmmer_pure_rs::Hmm, popen: Option<f64>, pextend: Option<f64>) {
-    use hmmer_pure_rs::hmm::{DD, DM, II, IM, MD, MI, MM};
+fn apply_fixed_gap_params(hmm: &mut tongs::Hmm, popen: Option<f64>, pextend: Option<f64>) {
+    use tongs::hmm::{DD, DM, II, IM, MD, MI, MM};
 
     for node in 0..=hmm.m {
         if let Some(popen) = popen {
@@ -1429,7 +1429,7 @@ fn guess_msa_alphabet(msa: &msa::Msa) -> Result<AlphabetType, String> {
     Err("could not determine alignment alphabet".to_string())
 }
 
-fn mean_match_relative_entropy(hmm: &hmmer_pure_rs::Hmm, bg: &Bg) -> f32 {
+fn mean_match_relative_entropy(hmm: &tongs::Hmm, bg: &Bg) -> f32 {
     let mut sum = 0.0_f32;
     for node in 1..=hmm.m {
         for x in 0..hmm.abc_k {

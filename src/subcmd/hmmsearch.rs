@@ -8,17 +8,17 @@ use std::path::{Path, PathBuf};
 
 use clap::Parser;
 
-use hmmer_pure_rs::alphabet::Alphabet;
-use hmmer_pure_rs::bg::Bg;
-use hmmer_pure_rs::hmmfile;
-use hmmer_pure_rs::logsum;
-use hmmer_pure_rs::output::{fmt_bias, fmt_fixed1, fmt_fixed2, fmt_score, fmt_width5_1};
-use hmmer_pure_rs::pipeline::Pipeline;
-use hmmer_pure_rs::profile::{self, Profile, P7_LOCAL};
-use hmmer_pure_rs::sequence::{self, Sequence, SequenceFormat};
-use hmmer_pure_rs::simd::oprofile::OProfile;
-use hmmer_pure_rs::tophits::{Domain, Hit, TopHits};
-use hmmer_pure_rs::util::cmath::c_exp_f64;
+use tongs::alphabet::Alphabet;
+use tongs::bg::Bg;
+use tongs::hmmfile;
+use tongs::logsum;
+use tongs::output::{fmt_bias, fmt_fixed1, fmt_fixed2, fmt_score, fmt_width5_1};
+use tongs::pipeline::Pipeline;
+use tongs::profile::{self, Profile, P7_LOCAL};
+use tongs::sequence::{self, Sequence, SequenceFormat};
+use tongs::simd::oprofile::OProfile;
+use tongs::tophits::{Domain, Hit, TopHits};
+use tongs::util::cmath::c_exp_f64;
 
 const TARGET_BATCH_SIZE: usize = 4096;
 
@@ -307,7 +307,7 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
         .iter()
         .any(|arg| arg == "--cpu" || arg.starts_with("--cpu="))
         || std::env::var_os("HMMER_NCPU").is_some();
-    let args = hmmer_pure_rs::util::apply_hmmer_ncpu_env_default(args);
+    let args = tongs::util::apply_hmmer_ncpu_env_default(args);
     let args = Args::parse_from(&args);
     if let Some(format) = args.tformat.as_deref() {
         if SequenceFormat::from_name(format).is_none() {
@@ -322,7 +322,7 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
     if args.cpu > 0 {
         rayon::ThreadPoolBuilder::new()
             .num_threads(args.cpu)
-            .start_handler(|_| hmmer_pure_rs::util::simd_env::init())
+            .start_handler(|_| tongs::util::simd_env::init())
             .build_global()
             .ok();
     }
@@ -519,11 +519,11 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
 
         // Model-specific cutoffs (override both E-value and score thresholds)
         if args.cut_ga {
-            pli.use_bit_cutoffs = hmmer_pure_rs::pipeline::BitCutoff::GA;
+            pli.use_bit_cutoffs = tongs::pipeline::BitCutoff::GA;
         } else if args.cut_tc {
-            pli.use_bit_cutoffs = hmmer_pure_rs::pipeline::BitCutoff::TC;
+            pli.use_bit_cutoffs = tongs::pipeline::BitCutoff::TC;
         } else if args.cut_nc {
-            pli.use_bit_cutoffs = hmmer_pure_rs::pipeline::BitCutoff::NC;
+            pli.use_bit_cutoffs = tongs::pipeline::BitCutoff::NC;
         }
         if let Err(e) = pli.new_model_thresholds(&hmm.cutoff) {
             eprintln!("Error: {} for model {}", e, hmm.name);
@@ -533,11 +533,11 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
         // Database size overrides
         if let Some(z) = args.z_value {
             pli.z = z;
-            pli.z_setby = hmmer_pure_rs::pipeline::ZSetBy::Option;
+            pli.z_setby = tongs::pipeline::ZSetBy::Option;
         }
         if let Some(dz) = args.domz_value {
             pli.domz = dz;
-            pli.domz_setby = hmmer_pure_rs::pipeline::ZSetBy::Option;
+            pli.domz_setby = tongs::pipeline::ZSetBy::Option;
         }
 
         // Score sequences. For --cpu 0/1, stream the target database like C
@@ -578,7 +578,7 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
             let mut local_pli = Pipeline::new();
             local_pli.new_model(&local_gm);
             copy_reporting_thresholds(&mut local_pli, &pli);
-            if local_pli.use_bit_cutoffs != hmmer_pure_rs::pipeline::BitCutoff::None {
+            if local_pli.use_bit_cutoffs != tongs::pipeline::BitCutoff::None {
                 local_pli
                     .new_model_thresholds(&hmm.cutoff)
                     .unwrap_or_else(|e| {
@@ -746,17 +746,16 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
                     break;
                 }
 
-                let results: Vec<(Option<hmmer_pure_rs::tophits::Hit>, u64, u64, u64, u64)> = batch
+                let results: Vec<(Option<tongs::tophits::Hit>, u64, u64, u64, u64)> = batch
                     .par_iter()
                     .map_init(
                         || {
-                            hmmer_pure_rs::util::simd_env::init();
+                            tongs::util::simd_env::init();
                             let local_gm = (*shared_gm).clone();
                             let mut local_pli = Pipeline::new();
                             local_pli.new_model(&local_gm);
                             copy_reporting_thresholds(&mut local_pli, &pli);
-                            if local_pli.use_bit_cutoffs != hmmer_pure_rs::pipeline::BitCutoff::None
-                            {
+                            if local_pli.use_bit_cutoffs != tongs::pipeline::BitCutoff::None {
                                 local_pli
                                     .new_model_thresholds(&hmm.cutoff)
                                     .unwrap_or_else(|e| {
@@ -839,8 +838,8 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
 
         // Set Z (database size)
         let z = match pli.z_setby {
-            hmmer_pure_rs::pipeline::ZSetBy::Option => pli.z,
-            hmmer_pure_rs::pipeline::ZSetBy::Ntargets => pli.n_targets as f64,
+            tongs::pipeline::ZSetBy::Option => pli.z,
+            tongs::pipeline::ZSetBy::Ntargets => pli.n_targets as f64,
         };
 
         // Sort and threshold (first pass with domz = z for sequence-level reporting)
@@ -851,8 +850,8 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
 
         // Set domz: user-specified, or auto = nreported from first pass
         let domz = match pli.domz_setby {
-            hmmer_pure_rs::pipeline::ZSetBy::Option => pli.domz,
-            hmmer_pure_rs::pipeline::ZSetBy::Ntargets => th.nreported as f64,
+            tongs::pipeline::ZSetBy::Option => pli.domz,
+            tongs::pipeline::ZSetBy::Ntargets => th.nreported as f64,
         };
         // Re-threshold with correct domz for domain-level E-values
         if domz != z {
@@ -900,10 +899,10 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
         let mut any_reported = false;
         let mut have_printed_incthresh = false;
         for hit in &th.hits {
-            if hit.flags & hmmer_pure_rs::tophits::P7_IS_REPORTED == 0 {
+            if hit.flags & tongs::tophits::P7_IS_REPORTED == 0 {
                 continue;
             }
-            if hit.flags & hmmer_pure_rs::tophits::P7_IS_INCLUDED == 0 && !have_printed_incthresh {
+            if hit.flags & tongs::tophits::P7_IS_INCLUDED == 0 && !have_printed_incthresh {
                 writeln!(out, "  ------ inclusion threshold ------").unwrap();
                 have_printed_incthresh = true;
             }
@@ -921,12 +920,12 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
             writeln!(
                 out,
                 "  {} {} {}  {} {} {}  {} {:2}  {:<target_namew$}  {}",
-                hmmer_pure_rs::output::fmt_evalue(evalue),
-                hmmer_pure_rs::output::fmt_score(hit.score),
-                hmmer_pure_rs::output::fmt_bias(hit.bias),
-                hmmer_pure_rs::output::fmt_evalue(dom_evalue),
-                hmmer_pure_rs::output::fmt_score(dom_score),
-                hmmer_pure_rs::output::fmt_bias(dom_bias),
+                tongs::output::fmt_evalue(evalue),
+                tongs::output::fmt_score(hit.score),
+                tongs::output::fmt_bias(hit.bias),
+                tongs::output::fmt_evalue(dom_evalue),
+                tongs::output::fmt_score(dom_score),
+                tongs::output::fmt_bias(dom_bias),
                 fmt_width5_1(hit.nexpected as f64),
                 hit.nreported,
                 shown_hit_name(hit, show_acc),
@@ -962,7 +961,7 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
         }
 
         for hit in &th.hits {
-            if hit.flags & hmmer_pure_rs::tophits::P7_IS_REPORTED == 0 {
+            if hit.flags & tongs::tophits::P7_IS_REPORTED == 0 {
                 continue;
             }
 
@@ -1021,10 +1020,10 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
                     " {:3} {} {} {} {} {} {:7} {:7} {}{} {:7} {:7} {}{} {:7} {:7} {}{} {}",
                     reported_idx,
                     indicator,
-                    hmmer_pure_rs::output::fmt_score(dom.bitscore),
-                    hmmer_pure_rs::output::fmt_bias(dom.dombias),
-                    hmmer_pure_rs::output::fmt_evalue(c_evalue),
-                    hmmer_pure_rs::output::fmt_evalue(i_evalue),
+                    tongs::output::fmt_score(dom.bitscore),
+                    tongs::output::fmt_bias(dom.dombias),
+                    tongs::output::fmt_evalue(c_evalue),
+                    tongs::output::fmt_evalue(i_evalue),
                     hf,
                     ht,
                     hmm_left,
@@ -1037,7 +1036,7 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
                     dom.jenv,
                     env_left,
                     env_right,
-                    hmmer_pure_rs::output::fmt_fixed2(acc as f64),
+                    tongs::output::fmt_fixed2(acc as f64),
                 )
                 .unwrap();
             }
@@ -1054,8 +1053,8 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
                         out,
                         "  == domain {}  score: {} bits;  conditional E-value: {}",
                         reported_idx,
-                        hmmer_pure_rs::output::fmt_fixed1(dom.bitscore as f64),
-                        hmmer_pure_rs::output::fmt_evalue(evalue_from_lnp(domz, dom.lnp)).trim()
+                        tongs::output::fmt_fixed1(dom.bitscore as f64),
+                        tongs::output::fmt_evalue(evalue_from_lnp(domz, dom.lnp)).trim()
                     )
                     .unwrap();
 
@@ -1078,7 +1077,7 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
                             }
                             s
                         });
-                        hmmer_pure_rs::tophits::print_alidisplay_blocks_acc(
+                        tongs::tophits::print_alidisplay_blocks_acc(
                             &mut out,
                             &hmm.name,
                             hmm.acc.as_deref().unwrap_or(""),
@@ -1141,43 +1140,43 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
             out,
             "Passed MSV filter:               {:>11}  ({}); expected {} ({})",
             pli.n_past_msv,
-            hmmer_pure_rs::output::fmt_g(frac_msv),
-            hmmer_pure_rs::output::fmt_fixed1(expected_msv),
-            hmmer_pure_rs::output::fmt_g(pli.f1)
+            tongs::output::fmt_g(frac_msv),
+            tongs::output::fmt_fixed1(expected_msv),
+            tongs::output::fmt_g(pli.f1)
         )
         .unwrap();
         writeln!(
             out,
             "Passed bias filter:              {:>11}  ({}); expected {} ({})",
             pli.n_past_bias,
-            hmmer_pure_rs::output::fmt_g(frac_bias),
-            hmmer_pure_rs::output::fmt_fixed1(expected_msv),
-            hmmer_pure_rs::output::fmt_g(pli.f1)
+            tongs::output::fmt_g(frac_bias),
+            tongs::output::fmt_fixed1(expected_msv),
+            tongs::output::fmt_g(pli.f1)
         )
         .unwrap();
         writeln!(
             out,
             "Passed Vit filter:               {:>11}  ({}); expected {} ({})",
             pli.n_past_vit,
-            hmmer_pure_rs::output::fmt_g(frac_vit),
-            hmmer_pure_rs::output::fmt_fixed1(expected_vit),
-            hmmer_pure_rs::output::fmt_g(pli.f2)
+            tongs::output::fmt_g(frac_vit),
+            tongs::output::fmt_fixed1(expected_vit),
+            tongs::output::fmt_g(pli.f2)
         )
         .unwrap();
         writeln!(
             out,
             "Passed Fwd filter:               {:>11}  ({}); expected {} ({})",
             pli.n_past_fwd,
-            hmmer_pure_rs::output::fmt_g(frac_fwd),
-            hmmer_pure_rs::output::fmt_fixed1(expected_fwd),
-            hmmer_pure_rs::output::fmt_g(pli.f3)
+            tongs::output::fmt_g(frac_fwd),
+            tongs::output::fmt_fixed1(expected_fwd),
+            tongs::output::fmt_g(pli.f3)
         )
         .unwrap();
         writeln!(
             out,
             "Initial search space (Z):        {}  {}",
-            hmmer_pure_rs::output::fmt_width11_0(z),
-            if pli.z_setby == hmmer_pure_rs::pipeline::ZSetBy::Option {
+            tongs::output::fmt_width11_0(z),
+            if pli.z_setby == tongs::pipeline::ZSetBy::Option {
                 "[as set by --Z on cmdline]"
             } else {
                 "[actual number of targets]"
@@ -1187,8 +1186,8 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
         writeln!(
             out,
             "Domain search space  (domZ):     {}  {}",
-            hmmer_pure_rs::output::fmt_width11_0(domz),
-            if pli.domz_setby == hmmer_pure_rs::pipeline::ZSetBy::Option {
+            tongs::output::fmt_width11_0(domz),
+            if pli.domz_setby == tongs::pipeline::ZSetBy::Option {
                 "[as set by --domZ on cmdline]"
             } else {
                 "[number of targets reported over threshold]"
@@ -1324,7 +1323,7 @@ fn write_hmmsearch_option_header(out: &mut dyn Write, args: &Args, cmdline: &str
         writeln!(
             out,
             "# sequence reporting threshold:    E-value <= {}",
-            hmmer_pure_rs::output::fmt_g(args.e_value)
+            tongs::output::fmt_g(args.e_value)
         )
         .unwrap();
     }
@@ -1332,7 +1331,7 @@ fn write_hmmsearch_option_header(out: &mut dyn Write, args: &Args, cmdline: &str
         writeln!(
             out,
             "# sequence reporting threshold:    score >= {}",
-            hmmer_pure_rs::output::fmt_g(score)
+            tongs::output::fmt_g(score)
         )
         .unwrap();
     }
@@ -1340,7 +1339,7 @@ fn write_hmmsearch_option_header(out: &mut dyn Write, args: &Args, cmdline: &str
         writeln!(
             out,
             "# domain reporting threshold:      E-value <= {}",
-            hmmer_pure_rs::output::fmt_g(args.dom_e)
+            tongs::output::fmt_g(args.dom_e)
         )
         .unwrap();
     }
@@ -1348,7 +1347,7 @@ fn write_hmmsearch_option_header(out: &mut dyn Write, args: &Args, cmdline: &str
         writeln!(
             out,
             "# domain reporting threshold:      score >= {}",
-            hmmer_pure_rs::output::fmt_g(score)
+            tongs::output::fmt_g(score)
         )
         .unwrap();
     }
@@ -1356,7 +1355,7 @@ fn write_hmmsearch_option_header(out: &mut dyn Write, args: &Args, cmdline: &str
         writeln!(
             out,
             "# sequence inclusion threshold:    E-value <= {}",
-            hmmer_pure_rs::output::fmt_g(args.inc_e)
+            tongs::output::fmt_g(args.inc_e)
         )
         .unwrap();
     }
@@ -1364,7 +1363,7 @@ fn write_hmmsearch_option_header(out: &mut dyn Write, args: &Args, cmdline: &str
         writeln!(
             out,
             "# sequence inclusion threshold:    score >= {}",
-            hmmer_pure_rs::output::fmt_g(score)
+            tongs::output::fmt_g(score)
         )
         .unwrap();
     }
@@ -1372,7 +1371,7 @@ fn write_hmmsearch_option_header(out: &mut dyn Write, args: &Args, cmdline: &str
         writeln!(
             out,
             "# domain inclusion threshold:      E-value <= {}",
-            hmmer_pure_rs::output::fmt_g(args.inc_dome)
+            tongs::output::fmt_g(args.inc_dome)
         )
         .unwrap();
     }
@@ -1380,7 +1379,7 @@ fn write_hmmsearch_option_header(out: &mut dyn Write, args: &Args, cmdline: &str
         writeln!(
             out,
             "# domain inclusion threshold:      score >= {}",
-            hmmer_pure_rs::output::fmt_g(score)
+            tongs::output::fmt_g(score)
         )
         .unwrap();
     }
@@ -1404,7 +1403,7 @@ fn write_hmmsearch_option_header(out: &mut dyn Write, args: &Args, cmdline: &str
         writeln!(
             out,
             "# MSV filter P threshold:       <= {}",
-            hmmer_pure_rs::output::fmt_g(args.f1)
+            tongs::output::fmt_g(args.f1)
         )
         .unwrap();
     }
@@ -1412,7 +1411,7 @@ fn write_hmmsearch_option_header(out: &mut dyn Write, args: &Args, cmdline: &str
         writeln!(
             out,
             "# Vit filter P threshold:       <= {}",
-            hmmer_pure_rs::output::fmt_g(args.f2)
+            tongs::output::fmt_g(args.f2)
         )
         .unwrap();
     }
@@ -1420,7 +1419,7 @@ fn write_hmmsearch_option_header(out: &mut dyn Write, args: &Args, cmdline: &str
         writeln!(
             out,
             "# Fwd filter P threshold:       <= {}",
-            hmmer_pure_rs::output::fmt_g(args.f3)
+            tongs::output::fmt_g(args.f3)
         )
         .unwrap();
     }
@@ -1434,7 +1433,7 @@ fn write_hmmsearch_option_header(out: &mut dyn Write, args: &Args, cmdline: &str
         writeln!(
             out,
             "# sequence search space set to:    {}",
-            hmmer_pure_rs::output::fmt_fixed0(z)
+            tongs::output::fmt_fixed0(z)
         )
         .unwrap();
     }
@@ -1442,7 +1441,7 @@ fn write_hmmsearch_option_header(out: &mut dyn Write, args: &Args, cmdline: &str
         writeln!(
             out,
             "# domain search space set to:      {}",
-            hmmer_pure_rs::output::fmt_fixed0(domz)
+            tongs::output::fmt_fixed0(domz)
         )
         .unwrap();
     }
@@ -1484,9 +1483,7 @@ fn command_line_has_option(cmdline: &str, option: &str) -> bool {
 
 /// Read one or more profile HMMs from `path`, auto-dispatching ASCII vs binary
 /// by magic bytes like C `p7_hmmfile_Open`.
-fn read_hmms(
-    path: &std::path::Path,
-) -> hmmer_pure_rs::errors::HmmerResult<Vec<hmmer_pure_rs::Hmm>> {
+fn read_hmms(path: &std::path::Path) -> tongs::errors::HmmerResult<Vec<tongs::Hmm>> {
     if path == std::path::Path::new("-") {
         hmmfile::read_hmms_auto(BufReader::new(std::io::stdin().lock()))
     } else {
@@ -1588,7 +1585,7 @@ pub fn write_tblout<W: Write>(
     }
 
     for hit in &th.hits {
-        if hit.flags & hmmer_pure_rs::tophits::P7_IS_REPORTED == 0 {
+        if hit.flags & tongs::tophits::P7_IS_REPORTED == 0 {
             continue;
         }
         let evalue = evalue_from_lnp(z, hit.lnp);
@@ -1606,13 +1603,13 @@ pub fn write_tblout<W: Write>(
             if hit.acc.is_empty() { "-" } else { &hit.acc },
             qname,
             qacc_s,
-            hmmer_pure_rs::output::fmt_evalue(evalue),
-            hmmer_pure_rs::output::fmt_score(hit.score),
-            hmmer_pure_rs::output::fmt_bias(hit.bias),
-            hmmer_pure_rs::output::fmt_evalue(dom_evalue),
-            hmmer_pure_rs::output::fmt_score(dom_score),
-            hmmer_pure_rs::output::fmt_bias(dom_bias),
-            hmmer_pure_rs::output::fmt_width5_1(hit.nexpected as f64),
+            tongs::output::fmt_evalue(evalue),
+            tongs::output::fmt_score(hit.score),
+            tongs::output::fmt_bias(hit.bias),
+            tongs::output::fmt_evalue(dom_evalue),
+            tongs::output::fmt_score(dom_score),
+            tongs::output::fmt_bias(dom_bias),
+            tongs::output::fmt_width5_1(hit.nexpected as f64),
             hit.nregions,
             hit.nclustered,
             hit.noverlaps,
@@ -1710,10 +1707,10 @@ pub fn write_standard_stdout_tables<W: Write>(
     let mut any_reported = false;
     let mut have_printed_incthresh = false;
     for hit in &th.hits {
-        if hit.flags & hmmer_pure_rs::tophits::P7_IS_REPORTED == 0 {
+        if hit.flags & tongs::tophits::P7_IS_REPORTED == 0 {
             continue;
         }
-        if hit.flags & hmmer_pure_rs::tophits::P7_IS_INCLUDED == 0 && !have_printed_incthresh {
+        if hit.flags & tongs::tophits::P7_IS_INCLUDED == 0 && !have_printed_incthresh {
             writeln!(out, "  ------ inclusion threshold ------").unwrap();
             have_printed_incthresh = true;
         }
@@ -1727,11 +1724,11 @@ pub fn write_standard_stdout_tables<W: Write>(
         let dom_bias = best_dom.map(|d| d.dombias).unwrap_or(hit.bias);
         let desc = truncate_for_textw(&hit.desc, target_descw);
         let status = if show_hit_status
-            && hit.flags & hmmer_pure_rs::tophits::P7_IS_INCLUDED != 0
-            && hit.flags & hmmer_pure_rs::tophits::P7_IS_NEW != 0
+            && hit.flags & tongs::tophits::P7_IS_INCLUDED != 0
+            && hit.flags & tongs::tophits::P7_IS_NEW != 0
         {
             '+'
-        } else if show_hit_status && hit.flags & hmmer_pure_rs::tophits::P7_IS_DROPPED != 0 {
+        } else if show_hit_status && hit.flags & tongs::tophits::P7_IS_DROPPED != 0 {
             '-'
         } else {
             ' '
@@ -1741,10 +1738,10 @@ pub fn write_standard_stdout_tables<W: Write>(
             out,
             "{} {} {} {}  {} {} {}  {} {:2}  {:<target_namew$}  {}",
             status,
-            hmmer_pure_rs::output::fmt_evalue(evalue),
+            tongs::output::fmt_evalue(evalue),
             fmt_score(hit.score),
             fmt_bias(hit.bias),
-            hmmer_pure_rs::output::fmt_evalue(dom_evalue),
+            tongs::output::fmt_evalue(dom_evalue),
             fmt_score(dom_score),
             fmt_bias(dom_bias),
             fmt_width5_1(hit.nexpected as f64),
@@ -1780,7 +1777,7 @@ pub fn write_standard_stdout_tables<W: Write>(
     }
 
     for hit in &th.hits {
-        if hit.flags & hmmer_pure_rs::tophits::P7_IS_REPORTED == 0 {
+        if hit.flags & tongs::tophits::P7_IS_REPORTED == 0 {
             continue;
         }
 
@@ -1834,8 +1831,8 @@ pub fn write_standard_stdout_tables<W: Write>(
                 indicator,
                 fmt_score(dom.bitscore),
                 fmt_bias(dom.dombias),
-                hmmer_pure_rs::output::fmt_evalue(c_evalue),
-                hmmer_pure_rs::output::fmt_evalue(i_evalue),
+                tongs::output::fmt_evalue(c_evalue),
+                tongs::output::fmt_evalue(i_evalue),
                 hf,
                 ht,
                 hmm_left,
@@ -1865,7 +1862,7 @@ pub fn write_standard_stdout_tables<W: Write>(
                     "  == domain {}  score: {} bits;  conditional E-value: {}",
                     reported_idx,
                     fmt_fixed1(dom.bitscore as f64),
-                    hmmer_pure_rs::output::fmt_evalue(evalue_from_lnp(domz, dom.lnp)).trim()
+                    tongs::output::fmt_evalue(evalue_from_lnp(domz, dom.lnp)).trim()
                 )
                 .unwrap();
 
@@ -1896,7 +1893,7 @@ pub fn write_standard_stdout_tables<W: Write>(
                     // (C p7_alidisplay.c:1176-1180): each side shows its
                     // accession when --acc is set and the accession is non-empty,
                     // else falls back to the name.
-                    hmmer_pure_rs::tophits::print_alidisplay_blocks_acc(
+                    tongs::tophits::print_alidisplay_blocks_acc(
                         out,
                         model_name,
                         model_acc,
@@ -2022,7 +2019,7 @@ pub fn write_domtblout<W: Write>(
     }
 
     for hit in &th.hits {
-        if hit.flags & hmmer_pure_rs::tophits::P7_IS_REPORTED == 0 {
+        if hit.flags & tongs::tophits::P7_IS_REPORTED == 0 {
             continue;
         }
         let evalue = evalue_from_lnp(z, hit.lnp);
@@ -2051,22 +2048,22 @@ pub fn write_domtblout<W: Write>(
                 qname,
                 qacc_s,
                 qlen,
-                hmmer_pure_rs::output::fmt_evalue(evalue),
-                hmmer_pure_rs::output::fmt_score(hit.score),
-                hmmer_pure_rs::output::fmt_bias(hit.bias),
+                tongs::output::fmt_evalue(evalue),
+                tongs::output::fmt_score(hit.score),
+                tongs::output::fmt_bias(hit.bias),
                 reported_idx,
                 hit.nreported,
-                hmmer_pure_rs::output::fmt_evalue(c_evalue),
-                hmmer_pure_rs::output::fmt_evalue(i_evalue),
-                hmmer_pure_rs::output::fmt_score(dom.bitscore),
-                hmmer_pure_rs::output::fmt_bias(dom.dombias),
+                tongs::output::fmt_evalue(c_evalue),
+                tongs::output::fmt_evalue(i_evalue),
+                tongs::output::fmt_score(dom.bitscore),
+                tongs::output::fmt_bias(dom.dombias),
                 hmmfrom,
                 hmmto,
                 dom.iali,
                 dom.jali,
                 dom.ienv,
                 dom.jenv,
-                hmmer_pure_rs::output::fmt_width4_2(acc as f64),
+                tongs::output::fmt_width4_2(acc as f64),
                 if hit.desc.is_empty() { "-" } else { &hit.desc },
             ).unwrap();
         }
@@ -2138,7 +2135,7 @@ pub(crate) fn write_pfamtblout_with_pipeline<W: Write>(
     .unwrap();
 
     for hit in &th.hits {
-        if hit.flags & hmmer_pure_rs::tophits::P7_IS_REPORTED == 0 {
+        if hit.flags & tongs::tophits::P7_IS_REPORTED == 0 {
             continue;
         }
         let evalue = evalue_from_lnp(z, hit.lnp);
@@ -2146,11 +2143,11 @@ pub(crate) fn write_pfamtblout_with_pipeline<W: Write>(
             f,
             "{:<tnamew$}  {} {:>9} {:>3} {:>5} {}    {}",
             hit.name,
-            hmmer_pure_rs::output::fmt_score(hit.score),
-            hmmer_pure_rs::output::fmt_evalue(evalue),
+            tongs::output::fmt_score(hit.score),
+            tongs::output::fmt_evalue(evalue),
             hit.ndom,
-            hmmer_pure_rs::output::fmt_width5_1(hit.nexpected as f64),
-            hmmer_pure_rs::output::fmt_bias(hit.bias),
+            tongs::output::fmt_width5_1(hit.nexpected as f64),
+            tongs::output::fmt_bias(hit.bias),
             if hit.desc.is_empty() { "-" } else { &hit.desc },
         )
         .unwrap();
@@ -2202,7 +2199,7 @@ pub(crate) fn write_pfamtblout_with_pipeline<W: Write>(
     // index (which would skip over any unreported intervening domains).
     let mut reported_domains = Vec::new();
     for (hit_idx, hit) in th.hits.iter().enumerate() {
-        if hit.flags & hmmer_pure_rs::tophits::P7_IS_REPORTED == 0 {
+        if hit.flags & tongs::tophits::P7_IS_REPORTED == 0 {
             continue;
         }
         let mut ndom_reported = 0usize;
@@ -2226,10 +2223,10 @@ pub(crate) fn write_pfamtblout_with_pipeline<W: Write>(
             f,
             "{:<tnamew$}  {} {:>9} {:>5} {} {:>6} {:>6} {:>6} {:>6} {:>6} {:>6}     {}",
             hit.name,
-            hmmer_pure_rs::output::fmt_score(dom.bitscore),
-            hmmer_pure_rs::output::fmt_evalue(i_evalue),
+            tongs::output::fmt_score(dom.bitscore),
+            tongs::output::fmt_evalue(i_evalue),
             ndom_reported,
-            hmmer_pure_rs::output::fmt_bias(dom.dombias),
+            tongs::output::fmt_bias(dom.dombias),
             dom.ienv,
             dom.jenv,
             dom.iali,
@@ -2300,7 +2297,7 @@ pub fn write_table_footer<W: Write>(
     writeln!(
         f,
         "# Date:            {}",
-        hmmer_pure_rs::output::format_hmmer_date(std::time::SystemTime::now())
+        tongs::output::format_hmmer_date(std::time::SystemTime::now())
     )
     .unwrap();
     writeln!(f, "# [ok]").unwrap();
@@ -2354,7 +2351,7 @@ pub(crate) fn write_ali_output<W: Write>(
     textw: usize,
 ) -> Option<usize> {
     // p7_ALL_CONSENSUS_COLS (hmmsearch.c:559, phmmer.c:623).
-    let mut msa = hmmer_pure_rs::tophits::included_alignment(th, abc, model_len, None, true, name)?;
+    let mut msa = tongs::tophits::included_alignment(th, abc, model_len, None, true, name)?;
     msa.acc = acc.filter(|s| !s.is_empty()).map(|s| s.to_string());
     msa.desc = desc.filter(|s| !s.is_empty()).map(|s| s.to_string());
     msa.author = Some(author.to_string());
@@ -2367,7 +2364,7 @@ fn open_target_seq_file(
     path: &Path,
     abc: &Alphabet,
     tformat: Option<&str>,
-) -> hmmer_pure_rs::errors::HmmerResult<sequence::SeqFile<Box<dyn std::io::Read>>> {
+) -> tongs::errors::HmmerResult<sequence::SeqFile<Box<dyn std::io::Read>>> {
     if let Some(format) = tformat {
         sequence::open_seq_file_with_format(path, abc, SequenceFormat::from_name(format).unwrap())
     } else {
@@ -2390,8 +2387,8 @@ pub(crate) fn open_restricted_target_seq_file(
     }
     let ssi_path = ssifile
         .map(Path::to_path_buf)
-        .unwrap_or_else(|| hmmer_pure_rs::ssi::path_with_appended_suffix(path, ".ssi"));
-    let on_disk = hmmer_pure_rs::ssi::read_ssi_path(&ssi_path)
+        .unwrap_or_else(|| tongs::ssi::path_with_appended_suffix(path, ".ssi"));
+    let on_disk = tongs::ssi::read_ssi_path(&ssi_path)
         .map_err(|e| format!("failed to read SSI index {}: {e}", ssi_path.display()))?;
     if on_disk.indexed_path.file_name() != path.file_name() {
         return Err(format!(
@@ -2423,7 +2420,7 @@ pub(crate) fn open_restricted_target_seq_file(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use hmmer_pure_rs::tophits::{P7_IS_INCLUDED, P7_IS_REPORTED};
+    use tongs::tophits::{P7_IS_INCLUDED, P7_IS_REPORTED};
 
     fn domain(bitscore: f32, reported: bool) -> Domain {
         Domain {

@@ -5,8 +5,8 @@ use std::path::PathBuf;
 
 use clap::{ArgAction, Parser};
 
-use hmmer_pure_rs::hmmfile::{self, HmmAsciiFormat};
-use hmmer_pure_rs::hmmfile_binary;
+use tongs::hmmfile::{self, HmmAsciiFormat};
+use tongs::hmmfile_binary;
 
 #[derive(Parser)]
 #[command(
@@ -88,9 +88,7 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
     std::process::ExitCode::SUCCESS
 }
 
-fn read_hmms_maybe_stdin(
-    path: &std::path::Path,
-) -> hmmer_pure_rs::errors::HmmerResult<Vec<hmmer_pure_rs::Hmm>> {
+fn read_hmms_maybe_stdin(path: &std::path::Path) -> tongs::errors::HmmerResult<Vec<tongs::Hmm>> {
     if path == std::path::Path::new("-") {
         let stdin = std::io::stdin();
         hmmfile::read_hmms_auto(BufReader::new(stdin.lock()))

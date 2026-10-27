@@ -18,25 +18,25 @@ use std::process::ExitCode;
 
 use clap::Parser;
 
-use hmmer_pure_rs::alphabet::Alphabet;
-use hmmer_pure_rs::bg::Bg;
-use hmmer_pure_rs::calibrate::p7_lambda;
-use hmmer_pure_rs::dp::generic_fwdback::{g_forward, g_hybrid};
-use hmmer_pure_rs::dp::generic_msv::g_msv;
-use hmmer_pure_rs::dp::generic_viterbi::g_viterbi;
-use hmmer_pure_rs::dp::gmx::Gmx;
-use hmmer_pure_rs::hmm::Hmm;
-use hmmer_pure_rs::hmmfile;
-use hmmer_pure_rs::output::{fmt_fixed4, fmt_fixed6, fmt_g};
-use hmmer_pure_rs::profile::{
+use tongs::alphabet::Alphabet;
+use tongs::bg::Bg;
+use tongs::calibrate::p7_lambda;
+use tongs::dp::generic_fwdback::{g_forward, g_hybrid};
+use tongs::dp::generic_msv::g_msv;
+use tongs::dp::generic_viterbi::g_viterbi;
+use tongs::dp::gmx::Gmx;
+use tongs::hmm::Hmm;
+use tongs::hmmfile;
+use tongs::output::{fmt_fixed4, fmt_fixed6, fmt_g};
+use tongs::profile::{
     self, Profile, P7P_C, P7P_J, P7P_LOOP, P7P_MOVE, P7P_N, P7_GLOCAL, P7_LOCAL, P7_UNIGLOCAL,
     P7_UNILOCAL,
 };
-use hmmer_pure_rs::simd::oprofile::OProfile;
-use hmmer_pure_rs::stats::{exponential, gumbel};
-use hmmer_pure_rs::trace::{g_trace, State};
-use hmmer_pure_rs::util::cmath::{c_log_f64, c_logf_to_f32, c_sqrt_f64, ESL_CONST_LOG2};
-use hmmer_pure_rs::util::random::Mt19937;
+use tongs::simd::oprofile::OProfile;
+use tongs::stats::{exponential, gumbel};
+use tongs::trace::{g_trace, State};
+use tongs::util::cmath::{c_log_f64, c_logf_to_f32, c_sqrt_f64, ESL_CONST_LOG2};
+use tongs::util::random::Mt19937;
 
 #[derive(Parser)]
 #[command(name = "hmmsim", about = "Score random sequences against an HMM")]
@@ -261,7 +261,7 @@ pub fn run(args: Vec<String>) -> ExitCode {
         return ExitCode::FAILURE;
     }
 
-    hmmer_pure_rs::logsum::p7_flogsuminit();
+    tongs::logsum::p7_flogsuminit();
 
     let hmms = hmmfile::read_hmm_file_auto(&args.hmmfile).unwrap_or_else(|e| {
         eprintln!("Error: {}", e);
@@ -319,11 +319,11 @@ pub fn run(args: Vec<String>) -> ExitCode {
     let mut alilens = Vec::with_capacity(args.n);
 
     for _ in 0..args.n {
-        let mut dsq = vec![hmmer_pure_rs::alphabet::DSQ_SENTINEL];
+        let mut dsq = vec![tongs::alphabet::DSQ_SENTINEL];
         for _ in 0..args.l {
             dsq.push(rng.sample_residue(&bg.f));
         }
-        dsq.push(hmmer_pure_rs::alphabet::DSQ_SENTINEL);
+        dsq.push(tongs::alphabet::DSQ_SENTINEL);
 
         let null_sc = bg.null_one(args.l);
         let mut gx = Gmx::new(gm.m, args.l);
@@ -554,11 +554,11 @@ fn simulate_optimized_calibration_scores(
 
     for _ in 0..n {
         let mut dsq = Vec::with_capacity(l + 2);
-        dsq.push(hmmer_pure_rs::alphabet::DSQ_SENTINEL);
+        dsq.push(tongs::alphabet::DSQ_SENTINEL);
         for _ in 0..l {
             dsq.push(rng.sample_residue(&bg.f));
         }
-        dsq.push(hmmer_pure_rs::alphabet::DSQ_SENTINEL);
+        dsq.push(tongs::alphabet::DSQ_SENTINEL);
 
         let sc = match mode {
             OptimizedCalibrationMode::Msv => optimized_msv_filter_score(&dsq, l, &om, msv_maxsc),
@@ -583,16 +583,16 @@ fn simulate_optimized_calibration_scores(
 fn optimized_msv_filter_score(dsq: &[u8], l: usize, om: &OProfile, maxsc: f32) -> f32 {
     #[cfg(target_arch = "x86_64")]
     {
-        match unsafe { hmmer_pure_rs::simd::msv_filter::p7_msv_filter(dsq, l, om) } {
-            hmmer_pure_rs::simd::msv_filter::MsvResult::Ok(s) => s,
-            hmmer_pure_rs::simd::msv_filter::MsvResult::Overflow => maxsc,
+        match unsafe { tongs::simd::msv_filter::p7_msv_filter(dsq, l, om) } {
+            tongs::simd::msv_filter::MsvResult::Ok(s) => s,
+            tongs::simd::msv_filter::MsvResult::Overflow => maxsc,
         }
     }
     #[cfg(target_arch = "aarch64")]
     {
-        match unsafe { hmmer_pure_rs::simd::neon_msv::neon_msv_filter(dsq, l, om) } {
-            hmmer_pure_rs::simd::neon_msv::NeonMsvResult::Ok(s) => s,
-            hmmer_pure_rs::simd::neon_msv::NeonMsvResult::Overflow => maxsc,
+        match unsafe { tongs::simd::neon_msv::neon_msv_filter(dsq, l, om) } {
+            tongs::simd::neon_msv::NeonMsvResult::Ok(s) => s,
+            tongs::simd::neon_msv::NeonMsvResult::Overflow => maxsc,
         }
     }
 }
@@ -600,16 +600,16 @@ fn optimized_msv_filter_score(dsq: &[u8], l: usize, om: &OProfile, maxsc: f32) -
 fn optimized_viterbi_filter_score(dsq: &[u8], l: usize, om: &OProfile, maxsc: f32) -> f32 {
     #[cfg(target_arch = "x86_64")]
     {
-        match unsafe { hmmer_pure_rs::simd::vit_filter::p7_viterbi_filter(dsq, l, om) } {
-            hmmer_pure_rs::simd::vit_filter::VitResult::Ok(s) => s,
-            hmmer_pure_rs::simd::vit_filter::VitResult::Overflow => maxsc,
+        match unsafe { tongs::simd::vit_filter::p7_viterbi_filter(dsq, l, om) } {
+            tongs::simd::vit_filter::VitResult::Ok(s) => s,
+            tongs::simd::vit_filter::VitResult::Overflow => maxsc,
         }
     }
     #[cfg(target_arch = "aarch64")]
     {
-        match unsafe { hmmer_pure_rs::simd::neon_vit::neon_viterbi_filter(dsq, l, om) } {
-            hmmer_pure_rs::simd::neon_vit::NeonVitResult::Ok(s) => s,
-            hmmer_pure_rs::simd::neon_vit::NeonVitResult::Overflow => maxsc,
+        match unsafe { tongs::simd::neon_vit::neon_viterbi_filter(dsq, l, om) } {
+            tongs::simd::neon_vit::NeonVitResult::Ok(s) => s,
+            tongs::simd::neon_vit::NeonVitResult::Overflow => maxsc,
         }
     }
 }
@@ -617,11 +617,11 @@ fn optimized_viterbi_filter_score(dsq: &[u8], l: usize, om: &OProfile, maxsc: f3
 fn optimized_forward_parser_score(dsq: &[u8], l: usize, om: &OProfile) -> f32 {
     #[cfg(target_arch = "x86_64")]
     {
-        unsafe { hmmer_pure_rs::simd::fwd_filter::forward_parser(dsq, l, om) }
+        unsafe { tongs::simd::fwd_filter::forward_parser(dsq, l, om) }
     }
     #[cfg(target_arch = "aarch64")]
     {
-        unsafe { hmmer_pure_rs::simd::neon_fwd::neon_forward_parser(dsq, l, om) }
+        unsafe { tongs::simd::neon_fwd::neon_forward_parser(dsq, l, om) }
     }
 }
 

@@ -13,17 +13,17 @@ use std::time::Duration;
 use clap::Parser;
 use socket2::{Domain as SocketDomain, Protocol, SockAddr, Socket, Type};
 
-use hmmer_pure_rs::alphabet::{Alphabet, AlphabetType};
-use hmmer_pure_rs::bg::Bg;
-use hmmer_pure_rs::hmm::{Hmm, P7H_CA, P7H_CONS, P7H_CS, P7H_MAP, P7H_MMASK, P7H_RF};
-use hmmer_pure_rs::hmmfile;
-use hmmer_pure_rs::logsum;
-use hmmer_pure_rs::pipeline::{BitCutoff, Pipeline};
-use hmmer_pure_rs::profile::{self, Profile, P7_LOCAL};
-use hmmer_pure_rs::seqmodel;
-use hmmer_pure_rs::sequence::{self, Sequence};
-use hmmer_pure_rs::simd::oprofile::OProfile;
-use hmmer_pure_rs::tophits::{AliDisplay, Domain, Hit, TopHits};
+use tongs::alphabet::{Alphabet, AlphabetType};
+use tongs::bg::Bg;
+use tongs::hmm::{Hmm, P7H_CA, P7H_CONS, P7H_CS, P7H_MAP, P7H_MMASK, P7H_RF};
+use tongs::hmmfile;
+use tongs::logsum;
+use tongs::pipeline::{BitCutoff, Pipeline};
+use tongs::profile::{self, Profile, P7_LOCAL};
+use tongs::seqmodel;
+use tongs::sequence::{self, Sequence};
+use tongs::simd::oprofile::OProfile;
+use tongs::tophits::{AliDisplay, Domain, Hit, TopHits};
 
 #[derive(Parser)]
 #[command(name = "hmmpgmd", about = "HMMER search daemon")]
@@ -1074,7 +1074,7 @@ fn write_hit_response(stream: &mut std::net::TcpStream, results: &mut [SearchHit
             stream,
             "{}\t{}",
             hit.name,
-            hmmer_pure_rs::output::fmt_score(hit.score)
+            tongs::output::fmt_score(hit.score)
         );
     }
     let _ = writeln!(stream, "//");
@@ -2389,8 +2389,8 @@ fn parse_hmmd_sequence_query(
         return Err("short HMMD_SEARCH_CMD query data".to_string());
     }
     let dsq = &query_bytes[pos..end];
-    if dsq.first().copied() != Some(hmmer_pure_rs::alphabet::DSQ_SENTINEL)
-        || dsq.last().copied() != Some(hmmer_pure_rs::alphabet::DSQ_SENTINEL)
+    if dsq.first().copied() != Some(tongs::alphabet::DSQ_SENTINEL)
+        || dsq.last().copied() != Some(tongs::alphabet::DSQ_SENTINEL)
     {
         return Err("HMMD_SEARCH_CMD sequence query missing digital sentinels".to_string());
     }
@@ -2411,7 +2411,7 @@ fn parse_hmmd_hmm_query(query_bytes: &[u8], query_length: usize) -> Result<Clien
         .checked_add(1)
         .ok_or_else(|| "HMMD_SEARCH_CMD HMM query length overflow".to_string())?;
     let values_per_row =
-        hmmer_pure_rs::hmm::NTRANSITIONS
+        tongs::hmm::NTRANSITIONS
             .checked_add(2usize.checked_mul(Alphabet::amino().k).ok_or_else(|| {
                 "HMMD_SEARCH_CMD HMM query serialized length overflow".to_string()
             })?)
@@ -2444,7 +2444,7 @@ fn parse_hmmd_hmm_query(query_bytes: &[u8], query_length: usize) -> Result<Clien
 
     let mut pos = C_P7_HMM_SHELL_SIZE;
     for node in 0..=m {
-        for trans in 0..hmmer_pure_rs::hmm::NTRANSITIONS {
+        for trans in 0..tongs::hmm::NTRANSITIONS {
             hmm.t[node][trans] = take_native_f32(query_bytes, &mut pos, "HMM transitions")?;
         }
     }

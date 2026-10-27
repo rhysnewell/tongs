@@ -65,8 +65,6 @@ pub fn cluster(
 
     // For each cluster, compute posterior and C-style consensus endpoints.
     let mut envelopes = Vec::new();
-    #[cfg(feature = "tracehash")]
-    let mut accepted_ordinal = 0usize;
     for cluster_idx in 0..nclusters {
         let mut members = Vec::new();
         let mut trace_count = 0usize;
@@ -113,32 +111,6 @@ pub fn cluster(
         let best_k = left_endpoint(&members, segments, |s| s.k, kmin, kmax, epc_threshold);
         let best_j = right_endpoint(&members, segments, |s| s.j, jmin, jmax, epc_threshold);
         let best_m = right_endpoint(&members, segments, |s| s.m, mmin, mmax, epc_threshold);
-
-        #[cfg(feature = "tracehash")]
-        trace_cluster_candidate(
-            segments,
-            ntraces,
-            accepted_ordinal,
-            &members,
-            trace_count,
-            epc_threshold,
-            imin,
-            imax,
-            jmin,
-            jmax,
-            kmin,
-            kmax,
-            mmin,
-            mmax,
-            best_i,
-            best_j,
-            best_k,
-            best_m,
-        );
-        #[cfg(feature = "tracehash")]
-        {
-            accepted_ordinal += 1;
-        }
 
         if best_i > best_j || best_k > best_m {
             continue;
@@ -220,58 +192,6 @@ fn single_linkage_assignments(
     }
 
     (assignments, nclusters)
-}
-
-/// Tracehash hook: dump one accepted cluster candidate (extents and consensus endpoints).
-#[cfg(feature = "tracehash")]
-#[allow(clippy::too_many_arguments)]
-fn trace_cluster_candidate(
-    segments: &[SegmentPair],
-    ntraces: usize,
-    ordinal: usize,
-    members: &[usize],
-    trace_count: usize,
-    endpoint_threshold: usize,
-    imin: usize,
-    imax: usize,
-    jmin: usize,
-    jmax: usize,
-    kmin: usize,
-    kmax: usize,
-    mmin: usize,
-    mmax: usize,
-    best_i: usize,
-    best_j: usize,
-    best_k: usize,
-    best_m: usize,
-) {
-    let mut th = tracehash::th_call!("spensemble_cluster_candidate");
-    th.input_usize(ntraces);
-    th.input_usize(segments.len());
-    th.input_usize(ordinal);
-    for segment in segments {
-        th.input_usize(segment.trace_idx);
-        th.input_usize(segment.i);
-        th.input_usize(segment.j);
-        th.input_usize(segment.k);
-        th.input_usize(segment.m);
-    }
-    th.output_u64(members.len() as u64);
-    th.output_u64(trace_count as u64);
-    th.output_u64(endpoint_threshold as u64);
-    th.output_u64(imin as u64);
-    th.output_u64(imax as u64);
-    th.output_u64(jmin as u64);
-    th.output_u64(jmax as u64);
-    th.output_u64(kmin as u64);
-    th.output_u64(kmax as u64);
-    th.output_u64(mmin as u64);
-    th.output_u64(mmax as u64);
-    th.output_u64(best_i as u64);
-    th.output_u64(best_j as u64);
-    th.output_u64(best_k as u64);
-    th.output_u64(best_m as u64);
-    th.finish();
 }
 
 /// Single-linkage edge predicate: sufficient overlap in both seq and HMM coords,

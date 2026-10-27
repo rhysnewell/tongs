@@ -6,9 +6,9 @@ use std::path::PathBuf;
 use clap::Parser;
 use divsufsort::sort_in_place;
 
-use hmmer_pure_rs::alphabet::Alphabet;
-use hmmer_pure_rs::fm_index::FmIndex;
-use hmmer_pure_rs::sequence::{self, Sequence};
+use tongs::alphabet::Alphabet;
+use tongs::fm_index::FmIndex;
+use tongs::sequence::{self, Sequence};
 
 const META_MAGIC: &[u8] = b"HMMERDB_META\0";
 const META_VERSION: u32 = 1;

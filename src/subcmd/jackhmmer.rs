@@ -6,20 +6,20 @@ use std::path::{Path, PathBuf};
 
 use clap::{ArgAction, Parser};
 
-use hmmer_pure_rs::alphabet::Alphabet;
-use hmmer_pure_rs::bg::Bg;
-use hmmer_pure_rs::builder;
-use hmmer_pure_rs::builder::Builder;
-use hmmer_pure_rs::calibrate::CalibrationConfig;
-use hmmer_pure_rs::logsum;
-use hmmer_pure_rs::msa::Msa;
-use hmmer_pure_rs::pipeline::Pipeline;
-use hmmer_pure_rs::prior::PriorStrategy;
-use hmmer_pure_rs::profile::{self, Profile, P7_LOCAL};
-use hmmer_pure_rs::sequence::{self, Sequence, SequenceFormat};
-use hmmer_pure_rs::simd::oprofile::OProfile;
-use hmmer_pure_rs::tophits::{Hit, TopHits};
-use hmmer_pure_rs::trace::{State, Trace};
+use tongs::alphabet::Alphabet;
+use tongs::bg::Bg;
+use tongs::builder;
+use tongs::builder::Builder;
+use tongs::calibrate::CalibrationConfig;
+use tongs::logsum;
+use tongs::msa::Msa;
+use tongs::pipeline::Pipeline;
+use tongs::prior::PriorStrategy;
+use tongs::profile::{self, Profile, P7_LOCAL};
+use tongs::sequence::{self, Sequence, SequenceFormat};
+use tongs::simd::oprofile::OProfile;
+use tongs::tophits::{Hit, TopHits};
+use tongs::trace::{State, Trace};
 
 const TARGET_BATCH_SIZE: usize = 256;
 
@@ -463,7 +463,7 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
     let eft_was_requested = args
         .iter()
         .any(|arg| arg == "--Eft" || arg.starts_with("--Eft="));
-    let args = hmmer_pure_rs::util::apply_hmmer_ncpu_env_default(args);
+    let args = tongs::util::apply_hmmer_ncpu_env_default(args);
     let args = Args::parse_from(&args);
     if args.cut_ga {
         println!("Failed to parse command line: jackhmmer does not accept a --cut-ga option");
@@ -550,7 +550,7 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
     if args.cpu > 0 {
         rayon::ThreadPoolBuilder::new()
             .num_threads(args.cpu)
-            .start_handler(|_| hmmer_pure_rs::util::simd_env::init())
+            .start_handler(|_| tongs::util::simd_env::init())
             .build_global()
             .ok();
     }
@@ -861,7 +861,7 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
 
         let mut prev_included_names: Vec<String> = Vec::new();
         let mut prev_msa_nseq = 1usize;
-        let mut prev_hmm: Option<hmmer_pure_rs::hmm::Hmm> = None;
+        let mut prev_hmm: Option<tongs::hmm::Hmm> = None;
         let mut final_hits: Option<TopHits> = None;
         let mut final_z: Option<f64> = None;
         let mut final_domz: Option<f64> = None;
@@ -939,7 +939,7 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
                 drop(msa);
                 if !query_sq.desc.is_empty() {
                     hmm.desc = Some(query_sq.desc.clone());
-                    hmm.flags |= hmmer_pure_rs::hmm::P7H_DESC;
+                    hmm.flags |= tongs::hmm::P7H_DESC;
                 }
                 writeln!(out, "@@").unwrap();
                 writeln!(out, "@@ Round:                  {}", iteration).unwrap();
@@ -1009,7 +1009,7 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
                         .par_iter()
                         .map_init(
                             || {
-                                hmmer_pure_rs::util::simd_env::init();
+                                tongs::util::simd_env::init();
                                 let lb = local_bg.clone();
                                 let lgm = gm.clone();
                                 let lom = om.clone();
@@ -1084,12 +1084,12 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
                 final_domz = Some(domz);
             }
             for hit in &mut th.hits {
-                if hit.flags & hmmer_pure_rs::tophits::P7_IS_INCLUDED != 0
+                if hit.flags & tongs::tophits::P7_IS_INCLUDED != 0
                     && !prev_included_names.iter().any(|prev| prev == &hit.name)
                 {
-                    hit.flags |= hmmer_pure_rs::tophits::P7_IS_NEW;
+                    hit.flags |= tongs::tophits::P7_IS_NEW;
                 } else {
-                    hit.flags &= !hmmer_pure_rs::tophits::P7_IS_NEW;
+                    hit.flags &= !tongs::tophits::P7_IS_NEW;
                 }
             }
             crate::subcmd::hmmsearch::write_standard_stdout_tables(
@@ -1125,13 +1125,13 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
             let new_included_names: Vec<String> = th
                 .hits
                 .iter()
-                .filter(|hit| hit.flags & hmmer_pure_rs::tophits::P7_IS_INCLUDED != 0)
+                .filter(|hit| hit.flags & tongs::tophits::P7_IS_INCLUDED != 0)
                 .map(|hit| hit.name.clone())
                 .collect();
             let msa_nseq = th
                 .hits
                 .iter()
-                .filter(|hit| hit.flags & hmmer_pure_rs::tophits::P7_IS_INCLUDED != 0)
+                .filter(|hit| hit.flags & tongs::tophits::P7_IS_INCLUDED != 0)
                 .map(|hit| hit.dcl.iter().filter(|dom| dom.is_included).count())
                 .sum::<usize>()
                 + 1;
@@ -1146,7 +1146,7 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
             // `-A` after the loop ends. The previous round's MSA was either
             // consumed by this round's rebuild or dropped at the top of this
             // iteration, so the stash holds at most one MSA at a time.
-            let msa = hmmer_pure_rs::tophits::included_alignment(
+            let msa = tongs::tophits::included_alignment(
                 final_hits.as_ref().unwrap(),
                 &abc,
                 hmm.m,
@@ -1304,7 +1304,7 @@ fn write_jackhmmer_option_header(out: &mut dyn Write, args: &Args, cmdline: &str
         writeln!(
             out,
             "# sequence reporting threshold:    E-value <= {}",
-            hmmer_pure_rs::output::fmt_g(args.e_value)
+            tongs::output::fmt_g(args.e_value)
         )
         .unwrap();
     }
@@ -1313,7 +1313,7 @@ fn write_jackhmmer_option_header(out: &mut dyn Write, args: &Args, cmdline: &str
             out,
             // C jackhmmer prints "<=" here, despite score thresholds being minimums.
             "# sequence reporting threshold:    score <= {}",
-            hmmer_pure_rs::output::fmt_g(score)
+            tongs::output::fmt_g(score)
         )
         .unwrap();
     }
@@ -1321,7 +1321,7 @@ fn write_jackhmmer_option_header(out: &mut dyn Write, args: &Args, cmdline: &str
         writeln!(
             out,
             "# domain reporting threshold:      E-value <= {}",
-            hmmer_pure_rs::output::fmt_g(args.dom_e)
+            tongs::output::fmt_g(args.dom_e)
         )
         .unwrap();
     }
@@ -1330,7 +1330,7 @@ fn write_jackhmmer_option_header(out: &mut dyn Write, args: &Args, cmdline: &str
             out,
             // C jackhmmer prints "<=" here, despite score thresholds being minimums.
             "# domain reporting threshold:      score <= {}",
-            hmmer_pure_rs::output::fmt_g(score)
+            tongs::output::fmt_g(score)
         )
         .unwrap();
     }
@@ -1338,7 +1338,7 @@ fn write_jackhmmer_option_header(out: &mut dyn Write, args: &Args, cmdline: &str
         writeln!(
             out,
             "# sequence inclusion threshold:    E-value <= {}",
-            hmmer_pure_rs::output::fmt_g(args.inc_e)
+            tongs::output::fmt_g(args.inc_e)
         )
         .unwrap();
     }
@@ -1346,7 +1346,7 @@ fn write_jackhmmer_option_header(out: &mut dyn Write, args: &Args, cmdline: &str
         writeln!(
             out,
             "# sequence inclusion threshold:    score >= {}",
-            hmmer_pure_rs::output::fmt_g(score)
+            tongs::output::fmt_g(score)
         )
         .unwrap();
     }
@@ -1354,7 +1354,7 @@ fn write_jackhmmer_option_header(out: &mut dyn Write, args: &Args, cmdline: &str
         writeln!(
             out,
             "# domain inclusion threshold:      E-value <= {}",
-            hmmer_pure_rs::output::fmt_g(args.incdom_e)
+            tongs::output::fmt_g(args.incdom_e)
         )
         .unwrap();
     }
@@ -1362,7 +1362,7 @@ fn write_jackhmmer_option_header(out: &mut dyn Write, args: &Args, cmdline: &str
         writeln!(
             out,
             "# domain inclusion threshold:      score >= {}",
-            hmmer_pure_rs::output::fmt_g(score)
+            tongs::output::fmt_g(score)
         )
         .unwrap();
     }
@@ -1377,7 +1377,7 @@ fn write_jackhmmer_option_header(out: &mut dyn Write, args: &Args, cmdline: &str
         writeln!(
             out,
             "# MSV filter P threshold:       <= {}",
-            hmmer_pure_rs::output::fmt_g(args.f1)
+            tongs::output::fmt_g(args.f1)
         )
         .unwrap();
     }
@@ -1385,7 +1385,7 @@ fn write_jackhmmer_option_header(out: &mut dyn Write, args: &Args, cmdline: &str
         writeln!(
             out,
             "# Vit filter P threshold:       <= {}",
-            hmmer_pure_rs::output::fmt_g(args.f2)
+            tongs::output::fmt_g(args.f2)
         )
         .unwrap();
     }
@@ -1393,7 +1393,7 @@ fn write_jackhmmer_option_header(out: &mut dyn Write, args: &Args, cmdline: &str
         writeln!(
             out,
             "# Fwd filter P threshold:       <= {}",
-            hmmer_pure_rs::output::fmt_g(args.f3)
+            tongs::output::fmt_g(args.f3)
         )
         .unwrap();
     }
@@ -1407,7 +1407,7 @@ fn write_jackhmmer_option_header(out: &mut dyn Write, args: &Args, cmdline: &str
         writeln!(
             out,
             "# sequence search space set to:    {}",
-            hmmer_pure_rs::output::fmt_fixed0(z)
+            tongs::output::fmt_fixed0(z)
         )
         .unwrap();
     }
@@ -1415,7 +1415,7 @@ fn write_jackhmmer_option_header(out: &mut dyn Write, args: &Args, cmdline: &str
         writeln!(
             out,
             "# domain search space set to:      {}",
-            hmmer_pure_rs::output::fmt_fixed0(domz)
+            tongs::output::fmt_fixed0(domz)
         )
         .unwrap();
     }
@@ -1454,7 +1454,7 @@ fn open_sequence_file(
     path: &std::path::Path,
     abc: &Alphabet,
     format: Option<&str>,
-) -> hmmer_pure_rs::errors::HmmerResult<sequence::SeqFile<Box<dyn std::io::Read>>> {
+) -> tongs::errors::HmmerResult<sequence::SeqFile<Box<dyn std::io::Read>>> {
     if let Some(format) = format {
         sequence::open_seq_file_with_format(path, abc, SequenceFormat::from_name(format).unwrap())
     } else {
@@ -1515,42 +1515,42 @@ fn write_pipeline_stats<W: Write>(
         out,
         "Passed MSV filter:               {:>11}  ({}); expected {} ({})",
         stats.n_past_msv,
-        hmmer_pure_rs::output::fmt_g(frac(stats.n_past_msv)),
-        hmmer_pure_rs::output::fmt_fixed1(expected_msv),
-        hmmer_pure_rs::output::fmt_g(f1)
+        tongs::output::fmt_g(frac(stats.n_past_msv)),
+        tongs::output::fmt_fixed1(expected_msv),
+        tongs::output::fmt_g(f1)
     )
     .unwrap();
     writeln!(
         out,
         "Passed bias filter:              {:>11}  ({}); expected {} ({})",
         stats.n_past_bias,
-        hmmer_pure_rs::output::fmt_g(frac(stats.n_past_bias)),
-        hmmer_pure_rs::output::fmt_fixed1(expected_msv),
-        hmmer_pure_rs::output::fmt_g(f1)
+        tongs::output::fmt_g(frac(stats.n_past_bias)),
+        tongs::output::fmt_fixed1(expected_msv),
+        tongs::output::fmt_g(f1)
     )
     .unwrap();
     writeln!(
         out,
         "Passed Vit filter:               {:>11}  ({}); expected {} ({})",
         stats.n_past_vit,
-        hmmer_pure_rs::output::fmt_g(frac(stats.n_past_vit)),
-        hmmer_pure_rs::output::fmt_fixed1(expected_vit),
-        hmmer_pure_rs::output::fmt_g(f2)
+        tongs::output::fmt_g(frac(stats.n_past_vit)),
+        tongs::output::fmt_fixed1(expected_vit),
+        tongs::output::fmt_g(f2)
     )
     .unwrap();
     writeln!(
         out,
         "Passed Fwd filter:               {:>11}  ({}); expected {} ({})",
         stats.n_past_fwd,
-        hmmer_pure_rs::output::fmt_g(frac(stats.n_past_fwd)),
-        hmmer_pure_rs::output::fmt_fixed1(expected_fwd),
-        hmmer_pure_rs::output::fmt_g(f3)
+        tongs::output::fmt_g(frac(stats.n_past_fwd)),
+        tongs::output::fmt_fixed1(expected_fwd),
+        tongs::output::fmt_g(f3)
     )
     .unwrap();
     writeln!(
         out,
         "Initial search space (Z):        {}  {}",
-        hmmer_pure_rs::output::fmt_width11_0(z),
+        tongs::output::fmt_width11_0(z),
         if z_from_option {
             "[as set by --Z on cmdline]"
         } else {
@@ -1561,7 +1561,7 @@ fn write_pipeline_stats<W: Write>(
     writeln!(
         out,
         "Domain search space  (domZ):     {}  {}",
-        hmmer_pure_rs::output::fmt_width11_0(domz),
+        tongs::output::fmt_width11_0(domz),
         if domz_from_option {
             "[as set by --domZ on cmdline]"
         } else {
@@ -1587,7 +1587,7 @@ fn exact_match_query_trace(model_len: usize) -> Trace {
 }
 
 /// Write the HMM produced at `iteration` to `<prefix>-<iteration>.hmm`.
-fn write_hmm_checkpoint(prefix: &Path, iteration: usize, hmm: &hmmer_pure_rs::hmm::Hmm) {
+fn write_hmm_checkpoint(prefix: &Path, iteration: usize, hmm: &tongs::hmm::Hmm) {
     let path = checkpoint_path(prefix, iteration, "hmm");
     let mut file = std::fs::File::create(&path).unwrap_or_else(|e| {
         eprintln!("Error creating HMM checkpoint {}: {}", path.display(), e);
@@ -1606,7 +1606,7 @@ fn write_hmm_checkpoint(prefix: &Path, iteration: usize, hmm: &hmmer_pure_rs::hm
     } else {
         hmm
     };
-    hmmer_pure_rs::hmmfile::write_hmm(&mut file, hmm).unwrap_or_else(|e| {
+    tongs::hmmfile::write_hmm(&mut file, hmm).unwrap_or_else(|e| {
         eprintln!("Error writing HMM checkpoint {}: {}", path.display(), e);
         std::process::exit(1);
     });
@@ -1845,11 +1845,11 @@ fn configure_pipeline(pli: &mut Pipeline, args: &Args) {
     pli.f3 = if args.max { 1.0 } else { args.f3 };
     if let Some(z) = args.z_value {
         pli.z = z;
-        pli.z_setby = hmmer_pure_rs::pipeline::ZSetBy::Option;
+        pli.z_setby = tongs::pipeline::ZSetBy::Option;
     }
     if let Some(domz) = args.domz_value {
         pli.domz = domz;
-        pli.domz_setby = hmmer_pure_rs::pipeline::ZSetBy::Option;
+        pli.domz_setby = tongs::pipeline::ZSetBy::Option;
     }
 
     if let Some(t) = args.score_threshold {
