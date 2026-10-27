@@ -383,6 +383,10 @@ fn argmax_first(values: &[usize]) -> usize {
 }
 
 #[cfg(test)]
+#[path = "../tests/unit/spensemble_test.rs"]
+mod linkage_test;
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
