@@ -5725,7 +5725,7 @@ fn test_single_seq_dna_model_maxl_matches_bundled_c() {
 /// The whole single-sequence model, not just `MAXL`, must match C.
 ///
 /// `DATE` and `COM` are dropped: this port does not set `ctime` on any build
-/// path (see TODO.md), and `COM` echoes the command line.
+/// path, and `COM` echoes the command line.
 fn assert_singlemx_model_matches_c(extra_rust: &[&str], extra_c: &[&str], query_text: &str) {
     let dir = tempfile::tempdir().unwrap();
     let query = write_temp(dir.path(), "query.fa", query_text);
