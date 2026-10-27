@@ -24,10 +24,10 @@ fn run(abc_type: AlphabetType, mxname: &str) {
         s.outorder
     );
     println!("LAMBDA {mxname} {lambda:.17e}");
-    for a in 0..(abc.kp - 2) {
+    for (a, row) in q.iter().enumerate().take(abc.kp - 2) {
         print!("COND {mxname} {a}");
-        for b in 0..abc.k {
-            print!(" {:.17e}", q[a][b]);
+        for value in row.iter().take(abc.k) {
+            print!(" {value:.17e}");
         }
         println!();
     }
