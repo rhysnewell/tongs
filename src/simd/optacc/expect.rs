@@ -10,7 +10,6 @@ pub struct Expectation {
 }
 
 impl Expectation {
-    #[target_feature(enable = "sse2")]
     pub(super) unsafe fn add_row(&mut self, row: usize, cells: &[__m128], px: &[f32]) {
         let q = cells.len() / 3;
         let cells = cells.as_ptr().cast::<f32>();
@@ -38,7 +37,6 @@ impl Expectation {
         self.j += x[PXJ];
     }
 
-    #[target_feature(enable = "sse2")]
     pub unsafe fn null2(
         &mut self,
         l: usize,

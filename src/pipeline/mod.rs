@@ -79,15 +79,15 @@ pub struct Pipeline {
     // E-value parameters (from HMM)
     pub evparam: [f32; 6],
 
-    #[cfg(target_arch = "x86_64")]
-    msv_dp: Vec<std::arch::x86_64::__m128i>,
+    #[cfg(striped)]
+    msv_dp: Vec<crate::simd::sse::__m128i>,
     #[cfg(target_arch = "x86_64")]
     vit_dp: Vec<std::arch::x86_64::__m256i>,
-    #[cfg(target_arch = "x86_64")]
-    fwd_dp: Vec<std::arch::x86_64::__m128>,
-    #[cfg(target_arch = "x86_64")]
+    #[cfg(striped)]
+    fwd_dp: Vec<crate::simd::sse::__m128>,
+    #[cfg(striped)]
     fwd_pmx: crate::simd::probmx::ProbMx,
-    #[cfg(target_arch = "x86_64")]
+    #[cfg(striped)]
     domain_scratch: crate::domaindef::DomainSimdScratch,
 }
 
@@ -131,15 +131,15 @@ impl Pipeline {
             z_setby: ZSetBy::Ntargets,
             domz_setby: ZSetBy::Ntargets,
             evparam: [0.0; 6],
-            #[cfg(target_arch = "x86_64")]
+            #[cfg(striped)]
             msv_dp: Vec::new(),
             #[cfg(target_arch = "x86_64")]
             vit_dp: Vec::new(),
-            #[cfg(target_arch = "x86_64")]
+            #[cfg(striped)]
             fwd_dp: Vec::new(),
-            #[cfg(target_arch = "x86_64")]
+            #[cfg(striped)]
             fwd_pmx: crate::simd::probmx::ProbMx::new(0),
-            #[cfg(target_arch = "x86_64")]
+            #[cfg(striped)]
             domain_scratch: crate::domaindef::DomainSimdScratch::new(),
         }
     }
@@ -158,15 +158,15 @@ impl Pipeline {
             n_past_vit: 0,
             n_past_fwd: 0,
             n_targets: 0,
-            #[cfg(target_arch = "x86_64")]
+            #[cfg(striped)]
             msv_dp: Vec::new(),
             #[cfg(target_arch = "x86_64")]
             vit_dp: Vec::new(),
-            #[cfg(target_arch = "x86_64")]
+            #[cfg(striped)]
             fwd_dp: Vec::new(),
-            #[cfg(target_arch = "x86_64")]
+            #[cfg(striped)]
             fwd_pmx: crate::simd::probmx::ProbMx::new(0),
-            #[cfg(target_arch = "x86_64")]
+            #[cfg(striped)]
             domain_scratch: crate::domaindef::DomainSimdScratch::new(),
             ..*self
         }

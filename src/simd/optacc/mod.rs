@@ -3,7 +3,7 @@
 //! coordinate-only domain path.
 #![allow(clippy::missing_safety_doc)]
 
-use std::arch::x86_64::*;
+use crate::simd::sse::*;
 
 use crate::simd::oprofile::*;
 use crate::simd::probmx::{ProbMx, PXB, PXC, PXE, PXJ, PXN};

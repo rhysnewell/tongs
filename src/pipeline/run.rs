@@ -1,11 +1,12 @@
 use crate::bg::Bg;
+#[cfg(not(striped))]
 use crate::dp::gmx::Gmx;
 use crate::profile::*;
 use crate::sequence::Sequence;
-#[cfg(target_arch = "x86_64")]
+#[cfg(striped)]
 use crate::simd::msv_filter::MsvResult;
 use crate::simd::oprofile::OProfile;
-#[cfg(target_arch = "x86_64")]
+#[cfg(striped)]
 use crate::simd::vit_filter::{p7_viterbi_filter, VitResult};
 use crate::stats;
 use crate::tophits::*;
@@ -65,27 +66,22 @@ impl Pipeline {
 
             // Stage 1: MSV filter
             let usc: f32;
-            #[cfg(target_arch = "x86_64")]
+            #[cfg(striped)]
             {
-                if is_x86_feature_detected!("sse2") {
-                    let msv_result = unsafe {
-                        crate::simd::msv_filter::p7_msv_filter_with_scratch_rust_helper(
-                            &sq.dsq,
-                            l,
-                            om,
-                            &mut self.msv_dp,
-                        )
-                    };
-                    usc = match msv_result {
-                        MsvResult::Ok(sc) => sc,
-                        MsvResult::Overflow => f32::INFINITY,
-                    };
-                } else {
-                    let mut gx = Gmx::new(gm.m, l);
-                    usc = crate::dp::generic_msv::g_msv(&sq.dsq, l, gm, &mut gx, 2.0);
-                }
+                let msv_result = unsafe {
+                    crate::simd::msv_filter::p7_msv_filter_with_scratch_rust_helper(
+                        &sq.dsq,
+                        l,
+                        om,
+                        &mut self.msv_dp,
+                    )
+                };
+                usc = match msv_result {
+                    MsvResult::Ok(sc) => sc,
+                    MsvResult::Overflow => f32::INFINITY,
+                };
             }
-            #[cfg(not(target_arch = "x86_64"))]
+            #[cfg(not(striped))]
             {
                 let mut gx = Gmx::new(gm.m, l);
                 usc = crate::dp::generic_msv::g_msv(&sq.dsq, l, gm, &mut gx, 2.0);
@@ -113,31 +109,29 @@ impl Pipeline {
             // Stage 2: Viterbi filter (uses filtersc as baseline, matching C)
             if filter_p > self.f2 {
                 let vit_sc: f32;
-                #[cfg(target_arch = "x86_64")]
+                #[cfg(striped)]
                 {
-                    if is_x86_feature_detected!("sse2") {
-                        let vit_result = match om.vit.as_ref() {
-                            Some(vp) => unsafe {
-                                crate::simd::vit_avx2::viterbi_filter(
-                                    &sq.dsq,
-                                    l,
-                                    om,
-                                    vp,
-                                    &mut self.vit_dp,
-                                )
-                            },
-                            None => unsafe { p7_viterbi_filter(&sq.dsq, l, om) },
-                        };
-                        vit_sc = match vit_result {
-                            VitResult::Ok(sc) => sc,
-                            VitResult::Overflow => f32::INFINITY,
-                        };
-                    } else {
-                        let mut gx = Gmx::new(gm.m, l);
-                        vit_sc = crate::dp::generic_viterbi::g_viterbi(&sq.dsq, l, gm, &mut gx);
-                    }
+                    #[cfg(target_arch = "x86_64")]
+                    let vit_result = match om.vit.as_ref() {
+                        Some(vp) => unsafe {
+                            crate::simd::vit_avx2::viterbi_filter(
+                                &sq.dsq,
+                                l,
+                                om,
+                                vp,
+                                &mut self.vit_dp,
+                            )
+                        },
+                        None => unsafe { p7_viterbi_filter(&sq.dsq, l, om) },
+                    };
+                    #[cfg(not(target_arch = "x86_64"))]
+                    let vit_result = unsafe { p7_viterbi_filter(&sq.dsq, l, om) };
+                    vit_sc = match vit_result {
+                        VitResult::Ok(sc) => sc,
+                        VitResult::Overflow => f32::INFINITY,
+                    };
                 }
-                #[cfg(not(target_arch = "x86_64"))]
+                #[cfg(not(striped))]
                 {
                     let mut gx = Gmx::new(gm.m, l);
                     vit_sc = crate::dp::generic_viterbi::g_viterbi(&sq.dsq, l, gm, &mut gx);
@@ -178,29 +172,24 @@ impl Pipeline {
 
         // Stage 3: full Forward parser.
         let fwd_sc;
-        #[cfg(target_arch = "x86_64")]
-        let mut fwd_pmx_for_domains = None;
-        #[cfg(target_arch = "x86_64")]
+        #[cfg(striped)]
+        let fwd_pmx_for_domains;
+        #[cfg(striped)]
         {
-            if is_x86_feature_detected!("sse2") {
-                self.fwd_pmx.resize_parser(l);
-                fwd_sc = unsafe {
-                    crate::simd::fwd_filter::forward_parser_pmx_offset_with_scratch(
-                        &sq.dsq,
-                        0,
-                        l,
-                        om,
-                        &mut self.fwd_pmx,
-                        &mut self.fwd_dp,
-                    )
-                };
-                fwd_pmx_for_domains = Some(&self.fwd_pmx);
-            } else {
-                let mut gx = Gmx::new(gm.m, l);
-                fwd_sc = crate::dp::generic_fwdback::g_forward(&sq.dsq, l, gm, &mut gx);
-            }
+            self.fwd_pmx.resize_parser(l);
+            fwd_sc = unsafe {
+                crate::simd::fwd_filter::forward_parser_pmx_offset_with_scratch(
+                    &sq.dsq,
+                    0,
+                    l,
+                    om,
+                    &mut self.fwd_pmx,
+                    &mut self.fwd_dp,
+                )
+            };
+            fwd_pmx_for_domains = Some(&self.fwd_pmx);
         }
-        #[cfg(not(target_arch = "x86_64"))]
+        #[cfg(not(striped))]
         {
             let mut gx = Gmx::new(gm.m, l);
             fwd_sc = crate::dp::generic_fwdback::g_forward(&sq.dsq, l, gm, &mut gx);
@@ -219,16 +208,16 @@ impl Pipeline {
                 l,
                 gm,
                 Some(om),
-                #[cfg(target_arch = "x86_64")]
+                #[cfg(striped)]
                 fwd_pmx_for_domains,
-                #[cfg(not(target_arch = "x86_64"))]
+                #[cfg(not(striped))]
                 None,
                 Some(fwd_sc),
                 hmm,
                 bg,
                 null_sc,
                 self.seed,
-                #[cfg(target_arch = "x86_64")]
+                #[cfg(striped)]
                 &mut self.domain_scratch,
                 self.do_alignment,
                 self.do_alignment_display,

@@ -2,8 +2,8 @@
 //! Direct port of impl_sse/vitfilter.c p7_ViterbiFilter().
 #![allow(clippy::absurd_extreme_comparisons, clippy::needless_range_loop)]
 
-#[cfg(target_arch = "x86_64")]
-use std::arch::x86_64::*;
+#[cfg(striped)]
+use crate::simd::sse::*;
 
 use crate::alphabet::Dsq;
 use crate::simd::oprofile::*;
@@ -27,11 +27,7 @@ pub enum VitResult {
 /// `VitResult::Overflow`) but will not underflow. The profile must be in
 /// local or unilocal alignment mode; that's what guarantees limited dynamic
 /// range so the int16 arithmetic doesn't underflow.
-///
-/// # Safety
-/// Requires SSE2.
-#[cfg(target_arch = "x86_64")]
-#[target_feature(enable = "sse2")]
+#[cfg(striped)]
 pub unsafe fn p7_viterbi_filter(dsq: &[Dsq], l: usize, om: &OProfile) -> VitResult {
     let q_count = nqw(om.m);
     let nscells = 3; // M, D, I per q
@@ -207,11 +203,7 @@ pub unsafe fn p7_viterbi_filter(dsq: &[Dsq], l: usize, om: &OProfile) -> VitResu
 /// that position (peak model position k, length=1) and the M/D/I vectors are
 /// reset so the search restarts for the next peak. `filtersc` is the combined
 /// (nullsc + bias-scaled) filter score in nats; `p_thresh` is the F2 P-value.
-///
-/// # Safety
-/// Requires SSE2.
-#[cfg(target_arch = "x86_64")]
-#[target_feature(enable = "sse2")]
+#[cfg(striped)]
 pub unsafe fn p7_viterbi_filter_longtarget(
     dsq: &[Dsq],
     l: usize,
@@ -416,8 +408,7 @@ pub unsafe fn p7_viterbi_filter_longtarget(
 
 /// Horizontal max of 8 signed int16 elements in an SSE2 vector
 /// (Easel `esl_sse_hmax_epi16` equivalent: log2(8)=3 reduction steps).
-#[cfg(target_arch = "x86_64")]
-#[target_feature(enable = "sse2")]
+#[cfg(striped)]
 unsafe fn hmax_epi16(a: __m128i) -> i16 {
     let a = _mm_max_epi16(
         a,
@@ -433,8 +424,7 @@ unsafe fn hmax_epi16(a: __m128i) -> i16 {
 
 /// Check if any signed int16 lane of `a` is greater than the corresponding
 /// lane of `b`. Used by the lazy-F termination test in Viterbi.
-#[cfg(target_arch = "x86_64")]
-#[target_feature(enable = "sse2")]
+#[cfg(striped)]
 unsafe fn any_gt_epi16(a: __m128i, b: __m128i) -> bool {
     _mm_movemask_epi8(_mm_cmpgt_epi16(a, b)) != 0
 }
@@ -458,9 +448,6 @@ mod tests {
     /// confirm a finite score or a clean overflow result.
     #[test]
     fn test_viterbi_filter_basic() {
-        if !is_x86_feature_detected!("sse2") {
-            return;
-        }
         let hmm = crate::hmmfile::read_hmm_file(Path::new(concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/hmmer/testsuite/20aa.hmm"

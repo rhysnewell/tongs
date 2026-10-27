@@ -209,7 +209,7 @@ mod tests {
         assert!(correction.is_finite(), "null2 correction should be finite");
     }
 
-    #[cfg(target_arch = "x86_64")]
+    #[cfg(striped)]
     #[test]
     fn test_simd_null2_matches_generic() {
         crate::logsum::p7_flogsuminit();

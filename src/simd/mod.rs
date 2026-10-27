@@ -1,30 +1,32 @@
 pub mod oprofile;
-#[cfg(target_arch = "x86_64")]
+#[cfg(striped)]
 pub mod optacc;
 
-#[cfg(target_arch = "x86_64")]
+#[cfg(striped)]
 pub mod bck_filter;
 pub mod fm_ssv;
-#[cfg(target_arch = "x86_64")]
+#[cfg(striped)]
 pub mod fwd_filter;
-#[cfg(target_arch = "x86_64")]
+#[cfg(striped)]
 pub mod msv_filter;
 pub mod probmx;
-#[cfg(target_arch = "x86_64")]
+#[cfg(striped)]
 pub mod ssv;
 pub mod ssv_longtarget;
 #[cfg(target_arch = "x86_64")]
 pub mod vit_avx2;
-#[cfg(target_arch = "x86_64")]
+#[cfg(striped)]
 pub mod vit_filter;
 
 #[cfg(test)]
 #[path = "../../tests/unit/simd/fixtures.rs"]
 pub(crate) mod fixtures;
 
-pub mod neon_fwd;
-pub mod neon_msv;
-pub mod neon_vit;
+#[cfg(target_arch = "x86_64")]
+pub use std::arch::x86_64 as sse;
+#[cfg(target_arch = "aarch64")]
+#[path = "sse_neon.rs"]
+pub mod sse;
 
 /// Build an 8-bit immediate shuffle mask for `_mm_shuffle_epi32` / `_mm_shufflelo_epi16`.
 /// The four 2-bit fields select source lanes (z = high, w = low).

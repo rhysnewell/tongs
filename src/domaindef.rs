@@ -1,7 +1,7 @@
 //! Domain definition using posterior probabilities.
 //! Port of p7_domaindef.c p7_domaindef_ByPosteriorHeuristics().
 #![cfg_attr(
-    not(target_arch = "x86_64"),
+    not(striped),
     allow(dead_code, unused_imports, unused_mut, unused_variables)
 )]
 
@@ -30,7 +30,7 @@ const NSAMPLES: usize = 200; // stochastic tracebacks for clustering
 
 /// True if every residue in `dsq[dsq_offset+1 ..= dsq_offset+l]` is a canonical
 /// alphabet code (`< abc_k`), enabling the fast no-degeneracy SIMD paths.
-#[cfg(target_arch = "x86_64")]
+#[cfg(striped)]
 #[inline(always)]
 fn is_canonical_window(dsq: &[Dsq], dsq_offset: usize, l: usize, abc_k: usize) -> bool {
     let Some(end) = dsq_offset.checked_add(l) else {
@@ -84,17 +84,17 @@ pub struct DomainDefinitionStats {
     pub nenvelopes: usize,
 }
 
-#[cfg(target_arch = "x86_64")]
+#[cfg(striped)]
 pub(crate) struct DomainSimdScratch {
-    fwd_dp: Vec<std::arch::x86_64::__m128>,
-    bck_prev: Vec<std::arch::x86_64::__m128>,
-    bck_cur: Vec<std::arch::x86_64::__m128>,
+    fwd_dp: Vec<crate::simd::sse::__m128>,
+    bck_prev: Vec<crate::simd::sse::__m128>,
+    bck_cur: Vec<crate::simd::sse::__m128>,
     fwd_pmx: crate::simd::probmx::ProbMx,
     bck_pmx: crate::simd::probmx::ProbMx,
     pp_pmx: crate::simd::probmx::ProbMx,
     oa_pmx: crate::simd::probmx::ProbMx,
     region_pmx: Option<crate::simd::probmx::ProbMx>,
-    pp_cells: Vec<std::arch::x86_64::__m128>,
+    pp_cells: Vec<crate::simd::sse::__m128>,
     expected: crate::simd::optacc::Expectation,
     null2: Vec<f32>,
     exp_m: Vec<f32>,
@@ -108,7 +108,7 @@ pub(crate) struct DomainSimdScratch {
     mocc: Vec<f32>,
 }
 
-#[cfg(target_arch = "x86_64")]
+#[cfg(striped)]
 impl DomainSimdScratch {
     /// Allocate an empty SIMD scratch bundle (matrices/buffers grow on first use).
     /// Reused across sequences to amortize allocations.
@@ -138,7 +138,7 @@ impl DomainSimdScratch {
     }
 }
 
-#[cfg(not(target_arch = "x86_64"))]
+#[cfg(not(striped))]
 pub(crate) struct DomainSimdScratch {
     fwd_gmx: Gmx,
     bck_gmx: Gmx,
@@ -148,7 +148,7 @@ pub(crate) struct DomainSimdScratch {
     oa_gmx: Gmx,
 }
 
-#[cfg(not(target_arch = "x86_64"))]
+#[cfg(not(striped))]
 impl DomainSimdScratch {
     /// Allocate a minimal scratch bundle for the non-x86 (generic) path.
     pub(crate) fn new() -> Self {
@@ -223,7 +223,7 @@ fn is_multidomain_region(btot: &[f32], etot: &[f32], i: usize, j: usize) -> bool
 /// length-`om.abc_k` odds vector f'(x)/f(x) used to bias-correct the domain
 /// envelope. The model configuration is irrelevant; only emission odds are
 /// used. Returns an all-ones vector if the segment emits no residues.
-#[cfg(target_arch = "x86_64")]
+#[cfg(striped)]
 fn null2_by_trace_optimized(
     om: &crate::simd::oprofile::OProfile,
     tr: &Trace,
@@ -466,18 +466,15 @@ fn score_domain_envelope(
     let mut simd_null2_scratch: Option<&[f32]> = None;
     let mut env_pp_storage: Option<Gmx>;
     let mut env_pp_ptr: *mut Gmx = std::ptr::null_mut();
-    #[cfg(target_arch = "x86_64")]
+    #[cfg(striped)]
     let mut simd_oa_coords: Option<(usize, usize, usize, usize)> = None;
-    #[cfg(target_arch = "x86_64")]
+    #[cfg(striped)]
     let mut simd_oa_trace: Option<crate::trace::Trace> = None;
-    #[cfg(target_arch = "x86_64")]
+    #[cfg(striped)]
     let mut simd_oasc: Option<f32> = None;
-    #[cfg(target_arch = "x86_64")]
+    #[cfg(striped)]
     let mut pre_trim_local_bg_f: Option<Vec<f32>> = None;
-    #[cfg(target_arch = "x86_64")]
-    let use_simd = is_x86_feature_detected!("sse2");
-    #[cfg(not(target_arch = "x86_64"))]
-    let use_simd = false;
+    let use_simd = cfg!(striped);
     // The striped path reads the generic posterior matrix only to display alignments or when it
     // finds no optimal accuracy trace, so it is cleared only then.
     let lazy_pp = make_alignment && use_simd && !make_alignment_display;
@@ -496,7 +493,7 @@ fn score_domain_envelope(
     }
 
     if use_simd {
-        #[cfg(target_arch = "x86_64")]
+        #[cfg(striped)]
         {
             use crate::simd::oprofile::OProfile;
             let env_om_storage;
@@ -675,15 +672,15 @@ fn score_domain_envelope(
                 }
             }
         }
-        #[cfg(not(target_arch = "x86_64"))]
+        #[cfg(not(striped))]
         unreachable!();
     } else {
-        #[cfg(target_arch = "x86_64")]
+        #[cfg(striped)]
         {
             let mut gx = Gmx::new(gm.m, env_len);
             env_fwd_sc = g_forward(&sub_dsq, env_len, env_gm, &mut gx);
         }
-        #[cfg(not(target_arch = "x86_64"))]
+        #[cfg(not(striped))]
         {
             simd_scratch.env_fwd_gmx.grow_to(gm.m, env_len);
             env_fwd_sc = g_forward(&sub_dsq, env_len, env_gm, &mut simd_scratch.env_fwd_gmx);
@@ -700,7 +697,7 @@ fn score_domain_envelope(
         || make_alignment_display
         || simd_null2_scratch.is_none() && !null2_is_done;
     if !env_pp_ptr.is_null() && unsafe { (*env_pp_ptr).l == 0 } && needs_generic_pp {
-        #[cfg(target_arch = "x86_64")]
+        #[cfg(striped)]
         {
             let mut gx_fwd = Gmx::new(gm.m, env_len);
             g_forward(&sub_dsq, env_len, env_gm, &mut gx_fwd);
@@ -708,7 +705,7 @@ fn score_domain_envelope(
             g_backward(&sub_dsq, env_len, env_gm, &mut gx_bck);
             g_decoding(env_gm, &gx_fwd, &gx_bck, unsafe { &mut *env_pp_ptr });
         }
-        #[cfg(not(target_arch = "x86_64"))]
+        #[cfg(not(striped))]
         {
             simd_scratch.env_fwd_gmx.grow_to(gm.m, env_len);
             g_forward(&sub_dsq, env_len, env_gm, &mut simd_scratch.env_fwd_gmx);
@@ -754,7 +751,7 @@ fn score_domain_envelope(
         let env_emission_odds =
             |k: usize, x: usize| env_om.and_then(|om| om.fwd_emission_odds(k, x));
 
-        #[cfg(target_arch = "x86_64")]
+        #[cfg(striped)]
         {
             if let Some(tr) = simd_oa_trace.take() {
                 // When make_alignment_display=true: use SIMD trace with env_pp for
@@ -897,7 +894,7 @@ fn score_domain_envelope(
     // Then run Forward with the DEFAULT (non-reparameterized) profile to get
     // domcorrection, used for bias. Final envsc = min(reparam, default);
     // domcorrection (nats) = default - envsc.
-    #[cfg(target_arch = "x86_64")]
+    #[cfg(striped)]
     let (env_fwd_sc, dom_correction, env_len, ienv, jenv, dsq_offset, trim_rebuilt_ad) =
         if do_longtarget_length {
             if let Some(base_om) = env_om {
@@ -1141,7 +1138,7 @@ fn score_domain_envelope(
             )
         };
     // If trim rebuilt the ad, replace ad/iali/jali/oasc with post-trim values.
-    #[cfg(target_arch = "x86_64")]
+    #[cfg(striped)]
     let (ad, iali, jali, oasc) = if let Some((new_ad, new_oasc)) = trim_rebuilt_ad {
         // new_ad.sqfrom/sqto are 1-based in the trim sub_dsq. Convert to
         // absolute coords via the (post-trim) dsq_offset.
@@ -1164,7 +1161,7 @@ fn score_domain_envelope(
     } else {
         (ad, iali, jali, oasc)
     };
-    #[cfg(not(target_arch = "x86_64"))]
+    #[cfg(not(striped))]
     let (env_fwd_sc, dom_correction) = (env_fwd_sc, dom_correction);
 
     // Omega-weighted null2 bias.
@@ -1292,27 +1289,24 @@ pub(crate) fn define_domains(
     bg: &Bg,
     null_sc: f32,
     seed: u32,
-    #[cfg(target_arch = "x86_64")] simd_scratch: &mut DomainSimdScratch,
+    #[cfg(striped)] simd_scratch: &mut DomainSimdScratch,
     make_alignment: bool,
     make_alignment_display: bool,
     long_target: bool,
     do_null2: bool,
 ) -> (Vec<Domain>, f32, f32, f32, DomainDefinitionStats) {
     crate::logsum::p7_flogsuminit();
-    #[cfg(not(target_arch = "x86_64"))]
+    #[cfg(not(striped))]
     let mut simd_scratch_storage = DomainSimdScratch::new();
-    #[cfg(not(target_arch = "x86_64"))]
+    #[cfg(not(striped))]
     let simd_scratch = &mut simd_scratch_storage;
 
     // Phase 1: Domain decoding (btot/etot/mocc) — SIMD when available
     let (mut btot, mut etot, mut mocc);
 
-    #[cfg(target_arch = "x86_64")]
-    let use_simd = is_x86_feature_detected!("sse2");
-    #[cfg(not(target_arch = "x86_64"))]
-    let use_simd = false;
+    let use_simd = cfg!(striped);
     if use_simd {
-        #[cfg(target_arch = "x86_64")]
+        #[cfg(striped)]
         {
             use crate::simd::oprofile::*;
             use crate::simd::probmx::p_domain_decoding_reuse;
@@ -1377,10 +1371,10 @@ pub(crate) fn define_domains(
                 &mut mocc,
             );
         }
-        #[cfg(not(target_arch = "x86_64"))]
+        #[cfg(not(striped))]
         unreachable!();
     } else {
-        #[cfg(target_arch = "x86_64")]
+        #[cfg(striped)]
         {
             let mut gx_fwd = Gmx::new(gm.m, l);
             g_forward(dsq, l, gm, &mut gx_fwd);
@@ -1391,7 +1385,7 @@ pub(crate) fn define_domains(
             etot = r.1;
             mocc = r.2;
         }
-        #[cfg(not(target_arch = "x86_64"))]
+        #[cfg(not(striped))]
         {
             simd_scratch.fwd_gmx.grow_to(gm.m, l);
             g_forward(dsq, l, gm, &mut simd_scratch.fwd_gmx);
@@ -1412,7 +1406,7 @@ pub(crate) fn define_domains(
         .iter()
         .map(|&(ri, rj)| is_multidomain_region(&btot, &etot, ri, rj))
         .collect();
-    #[cfg(target_arch = "x86_64")]
+    #[cfg(striped)]
     if use_simd {
         simd_scratch.btot = btot;
         simd_scratch.etot = etot;
@@ -1427,11 +1421,11 @@ pub(crate) fn define_domains(
     let mut env_gm = gm.clone();
     reconfig_unihit(&mut env_gm, l as i32);
     let optacc_deltas = OptAccTDelta::from_profile(&env_gm);
-    #[cfg(target_arch = "x86_64")]
+    #[cfg(striped)]
     let simd_match_odds: Option<Vec<f32>> = None;
-    #[cfg(not(target_arch = "x86_64"))]
+    #[cfg(not(striped))]
     let simd_match_odds: Option<Vec<f32>> = None;
-    #[cfg(target_arch = "x86_64")]
+    #[cfg(striped)]
     let env_om = if use_simd {
         if let Some(om) = om {
             let mut env_om = om.clone();
@@ -1443,7 +1437,7 @@ pub(crate) fn define_domains(
     } else {
         None
     };
-    #[cfg(not(target_arch = "x86_64"))]
+    #[cfg(not(striped))]
     let env_om: Option<crate::simd::oprofile::OProfile> = None;
 
     if regions.is_empty() {
@@ -1468,7 +1462,7 @@ pub(crate) fn define_domains(
             let mut sub_dsq_storage: Option<Vec<Dsq>> = None;
             let mut region_fwd_storage: Option<Gmx> = None;
 
-            #[cfg(target_arch = "x86_64")]
+            #[cfg(striped)]
             let region_trace_pmx = if use_simd {
                 if let Some(om) = om {
                     let mut region_om = om.clone();
@@ -1498,16 +1492,16 @@ pub(crate) fn define_domains(
 
             let mut rng = MersenneTwister::new(seed);
             let mut segments = Vec::new();
-            #[cfg(target_arch = "x86_64")]
+            #[cfg(striped)]
             let mut trace_pmx_scratch = Trace::new();
             for value in n2sc.iter_mut().take(rj + 1).skip(ri) {
                 *value = 0.0;
             }
 
             for trace_idx in 0..NSAMPLES {
-                #[cfg(target_arch = "x86_64")]
+                #[cfg(striped)]
                 let tr_storage;
-                #[cfg(target_arch = "x86_64")]
+                #[cfg(striped)]
                 let tr = if let Some((ref region_om, ref region_pmx)) = region_trace_pmx {
                     crate::dp::generic_stotrace::stochastic_trace_pmx_into(
                         &mut rng,
@@ -1540,9 +1534,9 @@ pub(crate) fn define_domains(
                     );
                     &tr_storage
                 };
-                #[cfg(not(target_arch = "x86_64"))]
+                #[cfg(not(striped))]
                 let tr_storage;
-                #[cfg(not(target_arch = "x86_64"))]
+                #[cfg(not(striped))]
                 let tr = {
                     if sub_dsq_storage.is_none() {
                         let mut sub_dsq = Vec::with_capacity(region_len + 2);
@@ -1612,13 +1606,13 @@ pub(crate) fn define_domains(
                 let mut pos = 1usize;
                 for (domain_idx, &(sqfrom, sqto, tfrom, tto)) in trace_domains.iter().enumerate() {
                     let _ = domain_idx;
-                    #[cfg(target_arch = "x86_64")]
+                    #[cfg(striped)]
                     let null2 = if let Some((ref region_om, _)) = region_trace_pmx {
                         null2_by_trace_optimized(region_om, tr, tfrom, tto)
                     } else {
                         generic_null2::null2_by_trace(&region_gm, tr, tfrom, tto)
                     };
-                    #[cfg(not(target_arch = "x86_64"))]
+                    #[cfg(not(striped))]
                     let null2 = generic_null2::null2_by_trace(&region_gm, tr, tfrom, tto);
                     while pos <= sqfrom && pos <= region_len {
                         n2sc[ri + pos - 1] += 1.0;
@@ -1702,7 +1696,7 @@ pub(crate) fn define_domains(
                     do_null2,
                 ));
             }
-            #[cfg(target_arch = "x86_64")]
+            #[cfg(striped)]
             if let Some((_, region_pmx)) = region_trace_pmx {
                 simd_scratch.region_pmx = Some(region_pmx);
             }

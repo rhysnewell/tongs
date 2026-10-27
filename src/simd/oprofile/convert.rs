@@ -38,10 +38,9 @@ pub(super) fn unbiased_byteify(scale_b: f32, sc: f32) -> u8 {
     }
 }
 
-#[cfg(target_arch = "x86_64")]
-#[target_feature(enable = "sse2")]
+#[cfg(striped)]
 pub(super) unsafe fn esl_sse_expf4(x: [f32; 4]) -> [f32; 4] {
-    use std::arch::x86_64::*;
+    use crate::simd::sse::*;
 
     const CEPHES_P0: f32 = 1.987_569_150_0e-4;
     const CEPHES_P1: f32 = 1.398_199_950_7e-3;
@@ -91,7 +90,7 @@ pub(super) unsafe fn esl_sse_expf4(x: [f32; 4]) -> [f32; 4] {
     y = _mm_add_ps(y, _mm_set1_ps(1.0));
 
     k = _mm_add_epi32(k, _mm_set1_epi32(127));
-    k = _mm_slli_epi32(k, 23);
+    k = _mm_slli_epi32::<23>(k);
     fx = _mm_castsi128_ps(k);
     y = _mm_mul_ps(y, fx);
 
@@ -105,14 +104,14 @@ pub(super) unsafe fn esl_sse_expf4(x: [f32; 4]) -> [f32; 4] {
 }
 
 /// Scalar fallback for `esl_sse_expf4` on non-x86 builds.
-#[cfg(not(target_arch = "x86_64"))]
+#[cfg(not(striped))]
 pub(super) fn esl_sse_expf4(x: [f32; 4]) -> [f32; 4] {
     x.map(esl_sse_expf_lane)
 }
 
 /// Scalar fallback for one lane of Easel's `esl_sse_expf()`. Uses the same
 /// Cephes minimax polynomial as the SSE version for bitwise parity.
-#[cfg(not(target_arch = "x86_64"))]
+#[cfg(not(striped))]
 #[inline]
 pub(super) fn esl_sse_expf_lane(mut x: f32) -> f32 {
     const CEPHES_P0: f32 = 1.9875691500e-4;
@@ -379,11 +378,11 @@ pub(super) fn fb_conversion(gm: &Profile) -> FbConversion {
                     f32::NEG_INFINITY
                 };
             }
-            #[cfg(target_arch = "x86_64")]
+            #[cfg(striped)]
             {
                 rfv[x][q] = unsafe { esl_sse_expf4(tmp) };
             }
-            #[cfg(not(target_arch = "x86_64"))]
+            #[cfg(not(striped))]
             {
                 rfv[x][q] = esl_sse_expf4(tmp);
             }
@@ -413,11 +412,11 @@ pub(super) fn fb_conversion(gm: &Profile) -> FbConversion {
                     f32::NEG_INFINITY
                 };
             }
-            #[cfg(target_arch = "x86_64")]
+            #[cfg(striped)]
             {
                 tfv[j] = unsafe { esl_sse_expf4(tmp) };
             }
-            #[cfg(not(target_arch = "x86_64"))]
+            #[cfg(not(striped))]
             {
                 tfv[j] = esl_sse_expf4(tmp);
             }
@@ -435,11 +434,11 @@ pub(super) fn fb_conversion(gm: &Profile) -> FbConversion {
                 f32::NEG_INFINITY
             };
         }
-        #[cfg(target_arch = "x86_64")]
+        #[cfg(striped)]
         {
             tfv[j] = unsafe { esl_sse_expf4(tmp) };
         }
-        #[cfg(not(target_arch = "x86_64"))]
+        #[cfg(not(striped))]
         {
             tfv[j] = esl_sse_expf4(tmp);
         }

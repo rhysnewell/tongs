@@ -3,8 +3,8 @@
 //! backward_engine() in impl_sse/fwdback.c.
 #![allow(clippy::needless_borrow, clippy::too_many_arguments)]
 
-#[cfg(target_arch = "x86_64")]
-use std::arch::x86_64::*;
+#[cfg(striped)]
+use crate::simd::sse::*;
 
 use crate::alphabet::Dsq;
 use crate::simd::oprofile::*;
@@ -27,11 +27,7 @@ use crate::util::cmath::c_log_f64;
 ///
 /// # Returns
 /// Backward score in nats.
-///
-/// # Safety
-/// Requires SSE2 support.
-#[cfg(target_arch = "x86_64")]
-#[target_feature(enable = "sse2")]
+#[cfg(striped)]
 pub unsafe fn backward_parser_pmx(
     dsq: &[Dsq],
     l: usize,
@@ -48,11 +44,7 @@ pub unsafe fn backward_parser_pmx(
 /// Identical to [`backward_parser_pmx`] but indexes residues at `dsq[dsq_offset+1..]`,
 /// letting callers process windows of a larger digital sequence without copying.
 /// Allocates per-call scratch SSE buffers; see `_with_scratch` for reuse.
-///
-/// # Safety
-/// Requires SSE2 support.
-#[cfg(target_arch = "x86_64")]
-#[target_feature(enable = "sse2")]
+#[cfg(striped)]
 pub unsafe fn backward_parser_pmx_offset(
     dsq: &[Dsq],
     dsq_offset: usize,
@@ -89,11 +81,7 @@ pub unsafe fn backward_parser_pmx_offset(
 /// a paired Forward; if `None`, Backward picks its own when xB grows large.
 ///
 /// Returns the Backward score (nats).
-///
-/// # Safety
-/// Requires SSE2 support.
-#[cfg(target_arch = "x86_64")]
-#[target_feature(enable = "sse2")]
+#[cfg(striped)]
 pub unsafe fn backward_parser_pmx_offset_with_scratch(
     dsq: &[Dsq],
     dsq_offset: usize,
@@ -421,10 +409,9 @@ pub unsafe fn backward_parser_pmx_offset_with_scratch(
 /// Returns the Backward score (nats).
 ///
 /// # Safety
-/// Requires SSE2 support; `pmx` must have its striped DP storage allocated and
+/// `pmx` must have its striped DP storage allocated and
 /// `dsq_offset+l` must be in bounds.
-#[cfg(target_arch = "x86_64")]
-#[target_feature(enable = "sse2")]
+#[cfg(striped)]
 pub(crate) unsafe fn backward_parser_pmx_offset_direct(
     dsq: &[Dsq],
     dsq_offset: usize,

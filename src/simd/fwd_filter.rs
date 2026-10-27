@@ -2,8 +2,8 @@
 //! Direct port of impl_sse/fwdback.c forward_engine() in parser mode.
 #![allow(clippy::let_and_return, clippy::needless_borrow)]
 
-#[cfg(target_arch = "x86_64")]
-use std::arch::x86_64::*;
+#[cfg(striped)]
+use crate::simd::sse::*;
 
 use crate::alphabet::Dsq;
 use crate::simd::oprofile::*;
@@ -19,11 +19,7 @@ use crate::util::cmath::c_log_f64;
 ///
 /// Profile must be in local alignment mode (sparse rescaling is unsafe for
 /// glocal/global).
-///
-/// # Safety
-/// Requires SSE2.
-#[cfg(target_arch = "x86_64")]
-#[target_feature(enable = "sse2")]
+#[cfg(striped)]
 pub unsafe fn forward_parser(dsq: &[Dsq], l: usize, om: &OProfile) -> f32 {
     forward_parser_offset(dsq, 0, l, om)
 }
@@ -35,11 +31,7 @@ pub unsafe fn forward_parser(dsq: &[Dsq], l: usize, om: &OProfile) -> f32 {
 /// sequence. Otherwise identical to [`forward_parser`]: striped SIMD MDI
 /// recurrence, scalar BENCJ specials, sparse rescaling, and a final
 /// `totscale + ln(xC * tCT)` return in nats.
-///
-/// # Safety
-/// Requires SSE2.
-#[cfg(target_arch = "x86_64")]
-#[target_feature(enable = "sse2")]
+#[cfg(striped)]
 pub unsafe fn forward_parser_offset(
     dsq: &[Dsq],
     dsq_offset: usize,
@@ -239,11 +231,7 @@ pub unsafe fn forward_parser_offset(
 /// keeps the running totscale in f64 (then narrows on store) so that posterior
 /// decoding normalization stays bit-equivalent to the original codebase. If
 /// `pmx.has_dp` is set the full striped DP matrix is also written.
-///
-/// # Safety
-/// Requires SSE2.
-#[cfg(target_arch = "x86_64")]
-#[target_feature(enable = "sse2")]
+#[cfg(striped)]
 pub unsafe fn forward_parser_pmx(
     dsq: &[Dsq],
     l: usize,
@@ -258,11 +246,7 @@ pub unsafe fn forward_parser_pmx(
 /// Allocates a fresh per-call SIMD scratch buffer; for hot loops prefer
 /// [`forward_parser_pmx_offset_with_scratch`] which lets callers amortize the
 /// allocation. Otherwise semantically identical to [`forward_parser_pmx`].
-///
-/// # Safety
-/// Requires SSE2.
-#[cfg(target_arch = "x86_64")]
-#[target_feature(enable = "sse2")]
+#[cfg(striped)]
 pub unsafe fn forward_parser_pmx_offset(
     dsq: &[Dsq],
     dsq_offset: usize,
@@ -285,11 +269,7 @@ pub unsafe fn forward_parser_pmx_offset(
 /// `xE > 1e4`, and accumulation of `totscale` in f64. Writes specials and
 /// row scales to `pmx`; if `pmx.has_dp` is set and the sequence has only valid
 /// digital codes it dispatches to the direct full-DP variant.
-///
-/// # Safety
-/// Requires SSE2.
-#[cfg(target_arch = "x86_64")]
-#[target_feature(enable = "sse2")]
+#[cfg(striped)]
 pub unsafe fn forward_parser_pmx_offset_with_scratch(
     dsq: &[Dsq],
     dsq_offset: usize,
@@ -496,10 +476,9 @@ pub unsafe fn forward_parser_pmx_offset_with_scratch(
 /// canonical, full-matrix case used by posterior decoding and null2.
 ///
 /// # Safety
-/// Requires SSE2; caller guarantees `pmx.has_dp` and that `dsq[1..=l]`
+/// Caller guarantees `pmx.has_dp` and that `dsq[1..=l]`
 /// contains no degenerate residues.
-#[cfg(target_arch = "x86_64")]
-#[target_feature(enable = "sse2")]
+#[cfg(striped)]
 pub(crate) unsafe fn forward_parser_pmx_offset_direct(
     dsq: &[Dsq],
     dsq_offset: usize,
@@ -719,8 +698,7 @@ fn canonical_run(dsq: &[Dsq], dsq_offset: usize, l: usize, abc_kp: usize) -> boo
 
 /// Right-shift a __m128 by one float element, zero-filling from the left.
 /// [a, b, c, d] -> [0, a, b, c]
-#[cfg(target_arch = "x86_64")]
-#[target_feature(enable = "sse2")]
+#[cfg(striped)]
 unsafe fn rightshift_float(v: __m128) -> __m128 {
     // Cast to integer, shift left by 4 bytes, cast back
     let vi = _mm_castps_si128(v);
@@ -740,9 +718,6 @@ mod tests {
     /// Forward parser on a short residue mix, asserting a finite score.
     #[test]
     fn test_forward_parser_basic() {
-        if !is_x86_feature_detected!("sse2") {
-            return;
-        }
         let hmm = crate::hmmfile::read_hmm_file(Path::new(concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/hmmer/testsuite/20aa.hmm"

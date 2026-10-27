@@ -1,6 +1,5 @@
 use super::*;
 
-#[target_feature(enable = "sse2")]
 pub unsafe fn oa_trace_coords_pmx(
     om: &OProfile,
     pp: &ProbMx,
@@ -88,7 +87,6 @@ pub unsafe fn oa_trace_coords_pmx(
     }
 }
 
-#[target_feature(enable = "sse2")]
 pub unsafe fn oa_trace_pmx(om: &OProfile, pp: &ProbMx, ox: &ProbMx) -> Trace {
     let mut tr = Trace::new();
     let mut i = ox.l;

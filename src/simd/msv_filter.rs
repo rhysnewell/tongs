@@ -6,8 +6,8 @@ use crate::alphabet::Dsq;
 use crate::simd::oprofile::{nqb, OProfile};
 use crate::simd::ssv::SsvResult;
 
-#[cfg(target_arch = "x86_64")]
-use std::arch::x86_64::*;
+#[cfg(striped)]
+use crate::simd::sse::*;
 
 /// Result of the MSV filter: either a finite score or a saturating overflow.
 pub enum MsvResult {
@@ -26,10 +26,6 @@ pub enum MsvResult {
 /// The model may be in any mode because only its match emission scores are used; the
 /// MSV filter inherently assumes a multihit local mode and uses its own special state
 /// transition scores rather than the scores in the profile.
-///
-/// # Safety
-/// Requires SSE2 support. Caller must verify CPU support.
-#[target_feature(enable = "sse2")]
 pub unsafe fn p7_msv_filter(dsq: &[Dsq], l: usize, om: &OProfile) -> MsvResult {
     let q_count = nqb(om.m);
 
@@ -128,7 +124,6 @@ fn ssv_shortcut(dsq: &[Dsq], l: usize, om: &OProfile) -> Option<MsvResult> {
     }
 }
 
-#[target_feature(enable = "sse2")]
 pub unsafe fn p7_msv_filter_with_scratch_rust_helper(
     dsq: &[Dsq],
     l: usize,
@@ -147,10 +142,6 @@ pub unsafe fn p7_msv_filter_with_scratch_rust_helper(
 /// This is the faithful MSV DP that C falls back to when SSV returns
 /// `eslENORESULT`. It is split out so callers (and AVX2 cross-check tests) can
 /// exercise the DP directly without the SSV short-circuit.
-///
-/// # Safety
-/// Requires SSE2 support.
-#[target_feature(enable = "sse2")]
 pub unsafe fn p7_msv_filter_dp_only_rust_helper(
     dsq: &[Dsq],
     l: usize,
@@ -258,10 +249,6 @@ mod tests {
     /// Smoke test: MSV filter returns a finite score (or overflow) on a tiny model.
     #[test]
     fn test_msv_filter_basic() {
-        if !is_x86_feature_detected!("sse2") {
-            return;
-        }
-
         let hmm = crate::hmmfile::read_hmm_file(Path::new(concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/hmmer/testsuite/20aa.hmm"

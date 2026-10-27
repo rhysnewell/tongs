@@ -581,48 +581,21 @@ fn simulate_optimized_calibration_scores(
 }
 
 fn optimized_msv_filter_score(dsq: &[u8], l: usize, om: &OProfile, maxsc: f32) -> f32 {
-    #[cfg(target_arch = "x86_64")]
-    {
-        match unsafe { tongs::simd::msv_filter::p7_msv_filter(dsq, l, om) } {
-            tongs::simd::msv_filter::MsvResult::Ok(s) => s,
-            tongs::simd::msv_filter::MsvResult::Overflow => maxsc,
-        }
-    }
-    #[cfg(target_arch = "aarch64")]
-    {
-        match unsafe { tongs::simd::neon_msv::neon_msv_filter(dsq, l, om) } {
-            tongs::simd::neon_msv::NeonMsvResult::Ok(s) => s,
-            tongs::simd::neon_msv::NeonMsvResult::Overflow => maxsc,
-        }
+    match unsafe { tongs::simd::msv_filter::p7_msv_filter(dsq, l, om) } {
+        tongs::simd::msv_filter::MsvResult::Ok(s) => s,
+        tongs::simd::msv_filter::MsvResult::Overflow => maxsc,
     }
 }
 
 fn optimized_viterbi_filter_score(dsq: &[u8], l: usize, om: &OProfile, maxsc: f32) -> f32 {
-    #[cfg(target_arch = "x86_64")]
-    {
-        match unsafe { tongs::simd::vit_filter::p7_viterbi_filter(dsq, l, om) } {
-            tongs::simd::vit_filter::VitResult::Ok(s) => s,
-            tongs::simd::vit_filter::VitResult::Overflow => maxsc,
-        }
-    }
-    #[cfg(target_arch = "aarch64")]
-    {
-        match unsafe { tongs::simd::neon_vit::neon_viterbi_filter(dsq, l, om) } {
-            tongs::simd::neon_vit::NeonVitResult::Ok(s) => s,
-            tongs::simd::neon_vit::NeonVitResult::Overflow => maxsc,
-        }
+    match unsafe { tongs::simd::vit_filter::p7_viterbi_filter(dsq, l, om) } {
+        tongs::simd::vit_filter::VitResult::Ok(s) => s,
+        tongs::simd::vit_filter::VitResult::Overflow => maxsc,
     }
 }
 
 fn optimized_forward_parser_score(dsq: &[u8], l: usize, om: &OProfile) -> f32 {
-    #[cfg(target_arch = "x86_64")]
-    {
-        unsafe { tongs::simd::fwd_filter::forward_parser(dsq, l, om) }
-    }
-    #[cfg(target_arch = "aarch64")]
-    {
-        unsafe { tongs::simd::neon_fwd::neon_forward_parser(dsq, l, om) }
-    }
+    unsafe { tongs::simd::fwd_filter::forward_parser(dsq, l, om) }
 }
 
 fn write_optional_outputs(

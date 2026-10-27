@@ -19,6 +19,7 @@ include = [
     "scripts/*.sh",
     "REAL_WORLD_FIXTURES.md",
     "Cargo.toml",
+    "build.rs",
     "README.md",
     "LICENSE",
     "!tests/cli_output_parity.rs",

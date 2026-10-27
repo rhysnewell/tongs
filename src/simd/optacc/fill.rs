@@ -15,7 +15,6 @@ pub(super) struct Fill<'a> {
 }
 
 impl<'a> Fill<'a> {
-    #[target_feature(enable = "sse2")]
     pub(super) unsafe fn start(
         om: &'a OProfile,
         pp: &ProbMx,
@@ -60,7 +59,6 @@ impl<'a> Fill<'a> {
         }
     }
 
-    #[target_feature(enable = "sse2")]
     pub(super) unsafe fn row(&self, i: usize) {
         let Fill {
             om,
@@ -202,7 +200,6 @@ impl<'a> Fill<'a> {
 
 // The fill reads each posterior row as it is decoded, and the expected emission counts are summed
 // row by row, so the cells of a full posterior matrix are never stored.
-#[target_feature(enable = "sse2")]
 pub unsafe fn decode_and_fill(
     fwd: &ProbMx,
     bck: &ProbMx,

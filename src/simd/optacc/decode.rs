@@ -17,7 +17,6 @@ pub(super) struct Decoding<'a> {
 }
 
 impl<'a> Decoding<'a> {
-    #[target_feature(enable = "sse2")]
     pub(super) unsafe fn start(
         fwd: &'a ProbMx,
         bck: &'a ProbMx,
@@ -70,7 +69,6 @@ impl<'a> Decoding<'a> {
         }
     }
 
-    #[target_feature(enable = "sse2")]
     pub(super) unsafe fn row(&mut self, i: usize) {
         let Decoding {
             fwd,
