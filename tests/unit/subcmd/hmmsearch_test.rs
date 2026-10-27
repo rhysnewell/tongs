@@ -1,5 +1,5 @@
 use super::*;
-use tongs::tophits::{P7_IS_INCLUDED, P7_IS_REPORTED};
+use tongs::tophits::{Domain, Hit, TopHits, P7_IS_INCLUDED, P7_IS_REPORTED};
 
 fn domain(bitscore: f32, reported: bool) -> Domain {
     Domain {

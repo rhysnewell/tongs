@@ -1,5 +1,10 @@
 use super::*;
 use crate::alphabet::Alphabet;
+use crate::bg::Bg;
+use crate::profile::{profile_config, P7_LOCAL};
+use crate::sequence::Sequence;
+use crate::simd::oprofile::OProfile;
+use crate::tophits::TopHits;
 use std::path::Path;
 
 #[test]
