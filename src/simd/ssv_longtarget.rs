@@ -6,17 +6,12 @@
 //! where the SSV score exceeds a P-value threshold. Used by nhmmer and
 //! Infernal for scanning genomes.
 
-#[cfg(striped)]
 use crate::simd::sse::*;
 
-#[cfg(striped)]
 use crate::alphabet::Dsq;
-#[cfg(striped)]
 use crate::bg::Bg;
 use crate::simd::oprofile::OProfile;
-#[cfg(striped)]
 use crate::stats;
-#[cfg(striped)]
 use crate::util::cmath::ESL_CONST_LOG2;
 
 /// A window hit from the SSV long-target filter.
@@ -114,7 +109,6 @@ pub fn get_ssv_score_array(om: &OProfile) -> Vec<u8> {
 /// Above-threshold diagonals become `HmmWindow` entries with start/end
 /// positions established by tracing the diagonal forward and backward through
 /// the SSV emission scores.
-#[cfg(striped)]
 pub unsafe fn p7_ssv_filter_longtarget(
     dsq: &[Dsq],
     l: usize,
@@ -343,75 +337,6 @@ pub unsafe fn p7_ssv_filter_longtarget(
     windows
 }
 
-/// Compute per-model-position prefix_lengths and suffix_lengths for the
-/// window extension heuristic. Port of `p7_hmm_ScoreDataComputeRest`
-/// (hmmer/src/p7_scoredata.c:314). Returns (prefix_lengths, suffix_lengths)
-/// each of size `M+1`, normalized prefix-sums that represent the fractional
-/// contribution of model positions to the expected window length.
-///
-/// For each position k in 1..M:
-///   `raw[k]` = 1 + floor(log(BETA/`t_MI[k]`) / log(`t_II[k]`))  (if `t_MI[k]` != 0)
-///   `raw[k]` = 1                                             (otherwise)
-/// Then `raw` is normalized by sum, suffix-summed, and prefix-summed.
-pub fn compute_prefix_suffix_lengths(hmm: &crate::hmm::Hmm) -> (Vec<f32>, Vec<f32>) {
-    // Deprecated: uses raw HMM transitions. Prefer `compute_prefix_suffix_lengths_from_om`
-    // which mirrors C `p7_hmm_ScoreDataComputeRest` exactly by reading
-    // transitions via the optimized profile's tfv array (= round-tripped
-    // exp(log)).
-    compute_prefix_suffix_lengths_hmm(hmm)
-}
-
-/// Legacy variant of `p7_hmm_ScoreDataComputeRest` that reads transitions
-/// straight from the raw HMM (`hmm.t[k][MI]`, `hmm.t[k][II]`). Kept for
-/// callers that don't yet have an `OProfile`; prefer
-/// `compute_prefix_suffix_lengths_from_om` for byte-exact C parity.
-fn compute_prefix_suffix_lengths_hmm(hmm: &crate::hmm::Hmm) -> (Vec<f32>, Vec<f32>) {
-    use crate::hmm::{II, MI};
-    const BETA: f32 = 1.0e-7;
-    let m = hmm.m;
-    let mut prefix = vec![0.0_f32; m + 1];
-    let mut suffix = vec![0.0_f32; m + 1];
-    let mut sum = 0.0_f32;
-    for k in 1..m {
-        // hmm.t[k] is the transitions at node k.
-        let t_mi = hmm.t[k][MI];
-        let t_ii = hmm.t[k][II];
-        prefix[k] = if t_mi == 0.0 {
-            1.0
-        } else {
-            let ln_t_ii = crate::util::cmath::c_log_f64(t_ii as f64);
-            if ln_t_ii == 0.0 {
-                1.0
-            } else {
-                let v = crate::util::cmath::c_log_f64(BETA as f64 / t_mi as f64) / ln_t_ii;
-                1.0 + v.floor() as f32
-            }
-        };
-        sum += prefix[k];
-    }
-    prefix[0] = 0.0;
-    prefix[m] = 0.0;
-    if sum > 0.0 {
-        for k in 1..m {
-            prefix[k] /= sum;
-        }
-    }
-
-    // suffix_lengths[M] = prefix_lengths[M-1]
-    if m >= 1 {
-        suffix[m] = prefix[m - 1];
-    }
-    // suffix[k] = suffix[k+1] + prefix[k-1] for k = M-1 down to 1
-    for k in (1..m).rev() {
-        suffix[k] = suffix[k + 1] + if k >= 1 { prefix[k - 1] } else { 0.0 };
-    }
-    // Prefix-sum into prefix: prefix[k] += prefix[k-1] for k in 2..M
-    for k in 2..m {
-        prefix[k] += prefix[k - 1];
-    }
-    (prefix, suffix)
-}
-
 /// Compute prefix/suffix lengths using the OPTIMIZED profile's transitions
 /// (tfv array), matching C `p7_hmm_ScoreDataComputeRest` byte-for-byte.
 ///
@@ -420,7 +345,6 @@ fn compute_prefix_suffix_lengths_hmm(hmm: &crate::hmm::Hmm) -> (Vec<f32>, Vec<f3
 /// probability). Reading from raw HMM transitions gives slightly different
 /// floating-point results that propagate through p7_pli_extend_and_merge_windows,
 /// changing SSV window lengths by a few residues.
-#[cfg(striped)]
 pub fn compute_prefix_suffix_lengths_from_om(
     om: &crate::simd::oprofile::OProfile,
 ) -> (Vec<f32>, Vec<f32>) {

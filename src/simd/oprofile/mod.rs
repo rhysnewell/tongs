@@ -10,7 +10,6 @@
 use std::sync::Arc;
 
 use crate::profile::*;
-#[cfg(striped)]
 use crate::util::cmath::c_log_to_f32;
 use crate::util::cmath::{c_expf_to_f32, c_logf_to_f32, ESL_CONST_LOG2};
 
@@ -53,12 +52,10 @@ pub const P7O_LOOP: usize = 1;
 pub const P7O_NXTRANS: usize = 2;
 
 /// 16-byte aligned wrapper around `[f32; 4]` for use with SSE `_mm_load_ps`.
-#[cfg(striped)]
 #[repr(align(16))]
 #[derive(Debug, Clone, Copy)]
 pub struct AlignedF32x4(pub [f32; 4]);
 
-#[cfg(striped)]
 impl AlignedF32x4 {
     /// Wrap a `[f32; 4]` into an aligned lane container.
     #[inline]
@@ -109,9 +106,7 @@ pub struct OProfile {
     pub rfv: Arc<Vec<Vec<[f32; 4]>>>,
     /// Float-precision transition scores: tfv[j][4 floats]
     pub tfv: Arc<Vec<[f32; 4]>>,
-    #[cfg(striped)]
     pub rfv_a: Arc<Vec<Vec<AlignedF32x4>>>,
-    #[cfg(striped)]
     pub tfv_a: Arc<Vec<AlignedF32x4>>,
     /// Special state float scores: `xf[state][transition]`
     pub xf: [[f32; P7O_NXTRANS]; P7O_NXSTATES],
@@ -143,13 +138,11 @@ impl OProfile {
         let vf = vf_conversion(gm);
         let fb = fb_conversion(gm);
 
-        #[cfg(striped)]
         let rfv_a: Vec<Vec<AlignedF32x4>> = fb
             .rfv
             .iter()
             .map(|rows| rows.iter().copied().map(AlignedF32x4::from_array).collect())
             .collect();
-        #[cfg(striped)]
         let tfv_a: Vec<AlignedF32x4> = fb
             .tfv
             .iter()
@@ -179,9 +172,7 @@ impl OProfile {
             ncj_roundoff: 0.0,
             rfv: Arc::new(fb.rfv),
             tfv: Arc::new(fb.tfv),
-            #[cfg(striped)]
             rfv_a: Arc::new(rfv_a),
-            #[cfg(striped)]
             tfv_a: Arc::new(tfv_a),
             xf: fb.xf,
             m,
@@ -321,7 +312,6 @@ impl OProfile {
             .copied()
     }
 
-    #[cfg(striped)]
     pub fn update_fwd_emission_scores(
         &mut self,
         bg: &crate::bg::Bg,

@@ -1,14 +1,10 @@
 use crate::bg::Bg;
-#[cfg(not(striped))]
-use crate::dp::gmx::Gmx;
 use crate::profile::*;
 use crate::sequence::Sequence;
-#[cfg(striped)]
 use crate::simd::msv_filter::MsvResult;
 use crate::simd::oprofile::OProfile;
 #[cfg(target_arch = "x86_64")]
 use crate::simd::vit_filter::p7_viterbi_filter;
-#[cfg(striped)]
 use crate::simd::vit_filter::VitResult;
 use crate::stats;
 use crate::tophits::*;
@@ -52,23 +48,20 @@ impl Pipeline {
         null_sc: f32,
         th: &mut TopHits,
     ) -> bool {
-        let Some(filtersc) = self.filters(gm, om, bg, sq, null_sc) else {
+        let Some(filtersc) = self.filters(om, bg, sq, null_sc) else {
             return false;
         };
-        let fwd_sc = self.forward(gm, om, sq);
+        let fwd_sc = self.forward(om, sq);
         self.after_forward(gm, om, bg, hmm, sq, null_sc, filtersc, fwd_sc, th)
     }
 
     pub(crate) fn filters(
         &mut self,
-        gm: &Profile,
         om: &OProfile,
         bg: &Bg,
         sq: &Sequence,
         null_sc: f32,
     ) -> Option<f32> {
-        #[cfg(striped)]
-        let _ = gm;
         let l = sq.n;
         if l == 0 {
             return None;
@@ -87,7 +80,6 @@ impl Pipeline {
 
             // Stage 1: MSV filter
             let usc: f32;
-            #[cfg(striped)]
             {
                 let msv_result = unsafe {
                     crate::simd::msv_filter::p7_msv_filter_with_scratch_rust_helper(
@@ -101,11 +93,6 @@ impl Pipeline {
                     MsvResult::Ok(sc) => sc,
                     MsvResult::Overflow => f32::INFINITY,
                 };
-            }
-            #[cfg(not(striped))]
-            {
-                let mut gx = Gmx::new(gm.m, l);
-                usc = crate::dp::generic_msv::g_msv(&sq.dsq, l, gm, &mut gx, 2.0);
             }
             if usc != f32::INFINITY {
                 let msv_pval = msv_pvalue(usc, null_sc, &self.evparam);
@@ -130,7 +117,6 @@ impl Pipeline {
             // Stage 2: Viterbi filter (uses filtersc as baseline, matching C)
             if filter_p > self.f2 {
                 let vit_sc: f32;
-                #[cfg(striped)]
                 {
                     #[cfg(target_arch = "x86_64")]
                     let vit_result = match om.vit.as_ref() {
@@ -158,11 +144,6 @@ impl Pipeline {
                         VitResult::Ok(sc) => sc,
                         VitResult::Overflow => f32::INFINITY,
                     };
-                }
-                #[cfg(not(striped))]
-                {
-                    let mut gx = Gmx::new(gm.m, l);
-                    vit_sc = crate::dp::generic_viterbi::g_viterbi(&sq.dsq, l, gm, &mut gx);
                 }
 
                 if vit_sc != f32::INFINITY {
@@ -200,20 +181,9 @@ impl Pipeline {
         Some(filtersc)
     }
 
-    pub(crate) fn forward(&mut self, gm: &Profile, om: &OProfile, sq: &Sequence) -> f32 {
-        #[cfg(striped)]
-        {
-            let _ = gm;
-            self.fwd_pmx.resize_parser(om.m, sq.n);
-            unsafe {
-                crate::simd::fwd_filter::forward_parser_pmx(&sq.dsq, sq.n, om, &mut self.fwd_pmx)
-            }
-        }
-        #[cfg(not(striped))]
-        {
-            let mut gx = Gmx::new(gm.m, sq.n);
-            crate::dp::generic_fwdback::g_forward(&sq.dsq, sq.n, gm, &mut gx)
-        }
+    fn forward(&mut self, om: &OProfile, sq: &Sequence) -> f32 {
+        self.fwd_pmx.resize_parser(om.m, sq.n);
+        unsafe { crate::simd::fwd_filter::forward_parser_pmx(&sq.dsq, sq.n, om, &mut self.fwd_pmx) }
     }
 
     pub(crate) fn passes_forward(&self, fwd_sc: f32, filtersc: f32) -> bool {
@@ -261,7 +231,6 @@ impl Pipeline {
         if !self.survives_forward(fwd_sc, filtersc) {
             return false;
         }
-        #[cfg(striped)]
         {
             self.bck_pmx.resize_parser(om.m, sq.n);
             unsafe {
@@ -278,22 +247,11 @@ impl Pipeline {
             dsq: &sq.dsq,
             l: sq.n,
             null_sc,
-            #[cfg(striped)]
             xf: om.xf,
-            #[cfg(striped)]
             fwd: &self.fwd_pmx,
-            #[cfg(striped)]
             bck: &self.bck_pmx,
         };
-        let model = Model {
-            gm,
-            #[cfg(striped)]
-            om,
-            hmm,
-            bg,
-        };
-        #[cfg(not(striped))]
-        let _ = om;
+        let model = Model { gm, om, hmm, bg };
         let [definition] =
             crate::domaindef::define(&model, [&target], self.settings(), &mut self.domains);
         self.report(gm, bg, sq, null_sc, fwd_sc, definition, th)

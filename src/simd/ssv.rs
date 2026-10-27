@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-#[cfg(striped)]
 use crate::simd::sse::*;
 
 use crate::alphabet::Dsq;
@@ -106,7 +105,6 @@ impl SsvProfile {
     }
 }
 
-#[cfg(striped)]
 macro_rules! ssv_step {
     (($subs:ident, $max:ident, $load:ident), $sv:ident, $xev:ident, $rsc:expr, [$($b:literal)*]) => {{
         let rsc = $rsc;
@@ -117,7 +115,6 @@ macro_rules! ssv_step {
     }};
 }
 
-#[cfg(striped)]
 macro_rules! ssv_turn {
     ($ops:tt, $wrap:ident, $sv:ident, $xev:ident, $beginv:ident, $row:ident, $i:ident, $q:expr,
      $limit:expr, $label:lifetime, $bs:tt, [$($j:literal)*]) => {
@@ -134,7 +131,6 @@ macro_rules! ssv_turn {
 
 // Each band width gets its own function so its diagonals stay in registers, as in HMMER's
 // fixed-width band functions.
-#[cfg(striped)]
 macro_rules! ssv_bands {
     ($feature:literal, $vec:ty, $set1:ident, $wrap:ident, $hmax:ident, $xe:ident,
      ($subs:ident, $max:ident, $load:ident),
@@ -226,13 +222,11 @@ unsafe fn avx2_hmax(v: __m256i) -> u8 {
     ))
 }
 
-#[cfg(striped)]
 #[inline]
 unsafe fn sse2_wrap(sv: __m128i, beginv: __m128i) -> __m128i {
     _mm_or_si128(_mm_slli_si128::<1>(sv), beginv)
 }
 
-#[cfg(striped)]
 #[inline]
 unsafe fn sse2_hmax(mut v: __m128i) -> u8 {
     v = _mm_max_epu8(v, _mm_srli_si128::<8>(v));
@@ -262,7 +256,6 @@ ssv_bands!(
     (avx2_band14, 14, [0 1 2 3 4 5 6 7 8 9 10 11 12 13], [13 12 11 10 9 8 7 6 5 4 3 2 1 0]),
 );
 
-#[cfg(striped)]
 ssv_bands!(
     "sse2", __m128i, _mm_set1_epi8, sse2_wrap, sse2_hmax, sse2_xe,
     (_mm_subs_epi8, _mm_max_epu8, _mm_load_si128),

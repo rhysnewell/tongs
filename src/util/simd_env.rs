@@ -28,8 +28,6 @@ impl Drop for FlushToZero {
 const FLUSH_TO_ZERO: usize = (1 << 6) | (1 << 15);
 #[cfg(target_arch = "aarch64")]
 const FLUSH_TO_ZERO: usize = 1 << 24;
-#[cfg(not(striped))]
-const FLUSH_TO_ZERO: usize = 0;
 
 #[cfg(target_arch = "x86_64")]
 unsafe fn read_mode() -> usize {
@@ -59,11 +57,3 @@ unsafe fn write_mode(mode: usize) {
         std::arch::asm!("msr fpcr, {}", in(reg) mode, options(nomem, nostack, preserves_flags))
     };
 }
-
-#[cfg(not(striped))]
-unsafe fn read_mode() -> usize {
-    0
-}
-
-#[cfg(not(striped))]
-unsafe fn write_mode(_mode: usize) {}

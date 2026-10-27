@@ -79,15 +79,12 @@ pub struct Pipeline {
     // E-value parameters (from HMM)
     pub evparam: [f32; 6],
 
-    #[cfg(striped)]
     msv_dp: Vec<crate::simd::sse::__m128i>,
     #[cfg(target_arch = "x86_64")]
     vit_dp: Vec<std::arch::x86_64::__m256i>,
-    #[cfg(all(striped, not(target_arch = "x86_64")))]
+    #[cfg(not(target_arch = "x86_64"))]
     vit_dp: Vec<crate::simd::sse::__m128i>,
-    #[cfg(striped)]
     fwd_pmx: crate::simd::probmx::ProbMx,
-    #[cfg(striped)]
     bck_pmx: crate::simd::probmx::ProbMx,
     domains: crate::domaindef::Scratch,
 }
@@ -132,13 +129,9 @@ impl Pipeline {
             z_setby: ZSetBy::Ntargets,
             domz_setby: ZSetBy::Ntargets,
             evparam: [0.0; 6],
-            #[cfg(striped)]
             msv_dp: Vec::new(),
-            #[cfg(striped)]
             vit_dp: Vec::new(),
-            #[cfg(striped)]
             fwd_pmx: Default::default(),
-            #[cfg(striped)]
             bck_pmx: Default::default(),
             domains: Default::default(),
         }
@@ -158,13 +151,9 @@ impl Pipeline {
             n_past_vit: 0,
             n_past_fwd: 0,
             n_targets: 0,
-            #[cfg(striped)]
             msv_dp: Vec::new(),
-            #[cfg(striped)]
             vit_dp: Vec::new(),
-            #[cfg(striped)]
             fwd_pmx: Default::default(),
-            #[cfg(striped)]
             bck_pmx: Default::default(),
             domains: Default::default(),
             ..*self

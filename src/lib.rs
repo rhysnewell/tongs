@@ -49,6 +49,9 @@
 // in from the binary) can keep using their existing `tongs::` paths.
 extern crate self as tongs;
 
+#[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+compile_error!("tongs runs its kernels on x86_64 SSE or aarch64 NEON");
+
 pub mod align;
 pub mod alphabet;
 pub mod bg;

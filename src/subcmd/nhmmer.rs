@@ -7,8 +7,6 @@
 //! makehmmerdb FM-index containers are loaded by reconstructing targets for the
 //! long-target path, with container FM records used to seed candidate windows
 //! when exact consensus seeds can be mapped back to sequence coordinates.
-#![cfg_attr(not(striped), allow(dead_code, unused_variables))]
-
 use std::io::{BufReader, Cursor, Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -1552,7 +1550,6 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
                     )?);
                     let strand_msv_count =
                         strand_msv_counter.load(std::sync::atomic::Ordering::Relaxed);
-                    #[cfg(striped)]
                     let strand_msv_count = if target_db.fm_index_records.is_empty()
                         && !do_max
                         && sq.n > effective_block_length
@@ -1650,7 +1647,6 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
                     )?;
                     let strand_msv_count =
                         strand_msv_counter.load(std::sync::atomic::Ordering::Relaxed);
-                    #[cfg(striped)]
                     let strand_msv_count = if target_db.fm_index_records.is_empty()
                         && !do_max
                         && rc_sq.n > effective_block_length
@@ -9505,13 +9501,6 @@ mod tests {
             "an explicit empty FM window list should not trigger reconstructed full-sequence scanning"
         );
     }
-
-    #[test]
-    fn nhmmer_longtarget_dispatch_fails_loudly_without_striped_kernels() {
-        let err = ensure_nhmmer_longtarget_accel_available_with(false).unwrap_err();
-
-        assert!(err.contains("x86_64 or aarch64"));
-    }
 }
 
 /// Search a single target sequence (one strand) and return its hits.
@@ -9545,41 +9534,33 @@ pub(crate) fn search_sequence(
     initial_windows: Option<&[NhmmerCandidateWindow]>,
     fm_context: Option<NhmmerSearchFmContext<'_>>,
 ) -> Result<Vec<tongs::tophits::Hit>, String> {
-    // Always use longtarget path: C HMMER's nhmmer calls p7_Pipeline_LongTarget
-    // for every sequence regardless of length.
-    ensure_nhmmer_longtarget_accel_available()?;
-    #[cfg(striped)]
-    {
-        return Ok(p7_pipeline_longtarget(
-            sq,
-            hmm,
-            gm,
-            om,
-            bg,
-            max_length,
-            f1,
-            f2,
-            f3,
-            do_max,
-            nobias,
-            nonull2,
-            seed,
-            bias_windows,
-            threshold_config,
-            is_complement,
-            msv_counter,
-            bias_counter,
-            vit_counter,
-            fwd_counter,
-            initial_windows,
-            fm_context,
-        ));
-    }
-    #[allow(unreachable_code)]
-    Err(nhmmer_longtarget_unsupported_message())
+    // C HMMER's nhmmer calls p7_Pipeline_LongTarget for every sequence regardless of length.
+    Ok(p7_pipeline_longtarget(
+        sq,
+        hmm,
+        gm,
+        om,
+        bg,
+        max_length,
+        f1,
+        f2,
+        f3,
+        do_max,
+        nobias,
+        nonull2,
+        seed,
+        bias_windows,
+        threshold_config,
+        is_complement,
+        msv_counter,
+        bias_counter,
+        vit_counter,
+        fwd_counter,
+        initial_windows,
+        fm_context,
+    ))
 }
 
-#[cfg(striped)]
 fn c_style_blocked_msv_residue_count(
     sq: &Sequence,
     hmm: &tongs::hmm::Hmm,
@@ -9625,7 +9606,6 @@ fn c_style_blocked_msv_residue_count(
     total
 }
 
-#[cfg(striped)]
 fn msv_residue_count_for_longtarget_window(
     sq: &Sequence,
     hmm: &tongs::hmm::Hmm,
@@ -9690,26 +9670,6 @@ fn msv_residue_count_for_longtarget_window(
         }
     }
     total
-}
-
-fn nhmmer_longtarget_accel_available() -> bool {
-    cfg!(striped)
-}
-
-fn nhmmer_longtarget_unsupported_message() -> String {
-    "nhmmer/nhmmscan long-target heuristic filters require an x86_64 or aarch64 build".to_string()
-}
-
-fn ensure_nhmmer_longtarget_accel_available() -> Result<(), String> {
-    ensure_nhmmer_longtarget_accel_available_with(nhmmer_longtarget_accel_available())
-}
-
-fn ensure_nhmmer_longtarget_accel_available_with(available: bool) -> Result<(), String> {
-    if available {
-        Ok(())
-    } else {
-        Err(nhmmer_longtarget_unsupported_message())
-    }
 }
 
 #[derive(Clone, Copy)]
@@ -9777,7 +9737,6 @@ impl NhmmerThresholdConfig {
 /// domain. Maintains the residue counters (msv/bias/vit/fwd) and the
 /// inter-window `fwd_overlap` carry exactly like C. Returned coordinates are
 /// in the strand-local (input `sq`) frame; the caller flips them for crick.
-#[cfg(striped)]
 #[allow(clippy::too_many_arguments)]
 fn p7_pipeline_longtarget(
     sq: &Sequence,
@@ -9862,10 +9821,7 @@ fn p7_pipeline_longtarget(
     } else {
         hmm.m * 4
     };
-    #[cfg(striped)]
     let (prefix_lens, suffix_lens) = ssv_longtarget::compute_prefix_suffix_lengths_from_om(om);
-    #[cfg(not(striped))]
-    let (prefix_lens, suffix_lens) = ssv_longtarget::compute_prefix_suffix_lengths(hmm);
     {
         ssv_longtarget::p7_pli_extend_and_merge_windows(
             &mut windows,

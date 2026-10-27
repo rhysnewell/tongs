@@ -1,8 +1,4 @@
-#[cfg(striped)]
 mod envelope;
-#[cfg(not(striped))]
-mod generic;
-#[cfg(striped)]
 mod long_target;
 mod null2;
 mod regions;
@@ -43,7 +39,6 @@ pub(crate) struct Definition {
 
 pub(crate) struct Model<'a> {
     pub gm: &'a Profile,
-    #[cfg(striped)]
     pub om: &'a crate::simd::oprofile::OProfile,
     pub hmm: &'a Hmm,
     pub bg: &'a Bg,
@@ -53,11 +48,8 @@ pub(crate) struct Target<'a> {
     pub dsq: &'a [Dsq],
     pub l: usize,
     pub null_sc: f32,
-    #[cfg(striped)]
     pub xf: [[f32; crate::simd::oprofile::P7O_NXTRANS]; crate::simd::oprofile::P7O_NXSTATES],
-    #[cfg(striped)]
     pub fwd: &'a crate::simd::probmx::ProbMx,
-    #[cfg(striped)]
     pub bck: &'a crate::simd::probmx::ProbMx,
 }
 
@@ -67,14 +59,9 @@ pub(crate) struct Scratch {
     etot: Vec<f32>,
     mocc: Vec<f32>,
     trace: Trace,
-    #[cfg(striped)]
     region_pmx: crate::simd::probmx::ProbMx,
-    #[cfg(striped)]
     slots: [envelope::Slot; 2],
-    #[cfg(striped)]
     shared: envelope::Shared,
-    #[cfg(not(striped))]
-    generic: generic::Scratch,
 }
 
 struct Plan {
@@ -140,10 +127,7 @@ fn plan(model: &Model, t: &Target, settings: Settings, scratch: &mut Scratch) ->
         }
         stats.nclustered += 1;
         let region_model = region_model.get_or_insert_with(|| multihit(model, l));
-        #[cfg(striped)]
         let mut sampler = StripedSampler::new(t, region, region_model, &mut scratch.region_pmx);
-        #[cfg(not(striped))]
-        let mut sampler = generic::Sampler::new(t, region, region_model);
         cluster_region(
             t.dsq,
             l,
@@ -166,7 +150,6 @@ fn plan(model: &Model, t: &Target, settings: Settings, scratch: &mut Scratch) ->
     }
 }
 
-#[cfg(striped)]
 fn decode(_model: &Model, t: &Target, scratch: &mut Scratch) {
     use crate::simd::oprofile::{P7O_C, P7O_J, P7O_LOOP, P7O_N};
     let njc_loop = [
@@ -185,33 +168,18 @@ fn decode(_model: &Model, t: &Target, scratch: &mut Scratch) {
     );
 }
 
-#[cfg(not(striped))]
-fn decode(model: &Model, t: &Target, scratch: &mut Scratch) {
-    (scratch.btot, scratch.etot, scratch.mocc) = scratch.generic.decode(model.gm, t);
-}
-
-#[cfg(striped)]
 fn multihit(model: &Model, l: usize) -> crate::simd::oprofile::OProfile {
     let mut om = model.om.clone();
     om.reconfig_multihit(l as i32);
     om
 }
 
-#[cfg(not(striped))]
-fn multihit(model: &Model, l: usize) -> Profile {
-    let mut gm = model.gm.clone();
-    crate::profile::reconfig_multihit(&mut gm, l as i32);
-    gm
-}
-
-#[cfg(striped)]
 struct StripedSampler<'a> {
     om: &'a crate::simd::oprofile::OProfile,
     pmx: &'a crate::simd::probmx::ProbMx,
     len: usize,
 }
 
-#[cfg(striped)]
 impl<'a> StripedSampler<'a> {
     fn new(
         t: &Target,
@@ -226,7 +194,6 @@ impl<'a> StripedSampler<'a> {
     }
 }
 
-#[cfg(striped)]
 impl regions::Sampler for StripedSampler<'_> {
     fn sample(&mut self, rng: &mut crate::util::random::MersenneTwister, tr: &mut Trace) {
         crate::dp::generic_stotrace::stochastic_trace_pmx_into(
@@ -239,7 +206,6 @@ impl regions::Sampler for StripedSampler<'_> {
     }
 }
 
-#[cfg(striped)]
 fn rescore<const N: usize>(
     model: &Model,
     targets: &[&Target; N],
@@ -302,24 +268,6 @@ fn rescore<const N: usize>(
                 &mut scratch.shared,
             );
             let domain = score::hmmsearch_domain(targets[t], model, job, slot.fwd_sc, r);
-            plan.domains.push(domain);
-        }
-    }
-}
-
-#[cfg(not(striped))]
-fn rescore<const N: usize>(
-    model: &Model,
-    targets: &[&Target; N],
-    plans: &mut [Plan; N],
-    settings: Settings,
-    scratch: &mut Scratch,
-) {
-    for (t, plan) in plans.iter_mut().enumerate() {
-        for &job in &plan.jobs {
-            let domain = scratch
-                .generic
-                .score(model, targets[t], settings, job, &mut plan.n2sc);
             plan.domains.push(domain);
         }
     }

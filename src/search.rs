@@ -13,7 +13,6 @@ use crate::sequence::Sequence;
 use crate::simd::oprofile::{OProfile, P7O_NXSTATES, P7O_NXTRANS};
 use crate::tophits::{Hit, TopHits};
 use crate::util::simd_env::FlushToZero;
-#[cfg(striped)]
 use crate::{
     domaindef::{Definition, Model, Target},
     simd::bck_filter::{backward, backward_pair, Backward},
@@ -124,14 +123,9 @@ impl<'a> Query<'a> {
             bg: self.bg.clone(),
             found: TopHits::new(),
             hits: Vec::new(),
-            #[cfg(striped)]
             pool: Vec::new(),
-            #[cfg(striped)]
             forward_held: None,
-            #[cfg(striped)]
             backward_held: None,
-            #[cfg(not(striped))]
-            _targets: std::marker::PhantomData,
         };
         let mut lengths: Vec<Option<Lengthed>> = vec![None; LENGTH_SLOTS];
         for (index, sq) in (first..).zip(targets) {
@@ -158,14 +152,12 @@ impl<'a> Query<'a> {
     }
 }
 
-#[cfg(striped)]
 #[derive(Default)]
 struct Parse {
     fwd: ProbMx,
     bck: ProbMx,
 }
 
-#[cfg(striped)]
 struct Pending<'t> {
     sq: &'t Sequence,
     kept: Lengthed,
@@ -175,7 +167,6 @@ struct Pending<'t> {
     parse: Parse,
 }
 
-#[cfg(striped)]
 impl Pending<'_> {
     fn target(&self) -> Target<'_> {
         Target {
@@ -199,43 +190,14 @@ struct Scanner<'q, 't> {
     bg: Bg,
     found: TopHits,
     hits: Vec<Hit>,
-    #[cfg(striped)]
     pool: Vec<Parse>,
-    #[cfg(striped)]
     forward_held: Option<Pending<'t>>,
-    #[cfg(striped)]
     backward_held: Option<Pending<'t>>,
-    #[cfg(not(striped))]
-    _targets: std::marker::PhantomData<&'t Sequence>,
 }
 
 impl<'t> Scanner<'_, 't> {
-    #[cfg(not(striped))]
     fn add(&mut self, sq: &'t Sequence, kept: Lengthed) {
-        let hmm = self.query.hmm;
-        self.pli.run_configured(
-            &self.gm,
-            &self.om,
-            &self.bg,
-            hmm,
-            sq,
-            kept.null_sc,
-            &mut self.found,
-        );
-        self.hits.append(&mut self.found.hits);
-    }
-
-    #[cfg(not(striped))]
-    fn finish(self) -> Scan {
-        self.into_scan()
-    }
-
-    #[cfg(striped)]
-    fn add(&mut self, sq: &'t Sequence, kept: Lengthed) {
-        let Some(filtersc) = self
-            .pli
-            .filters(&self.gm, &self.om, &self.bg, sq, kept.null_sc)
-        else {
+        let Some(filtersc) = self.pli.filters(&self.om, &self.bg, sq, kept.null_sc) else {
             return;
         };
         let this = Pending {
@@ -273,7 +235,6 @@ impl<'t> Scanner<'_, 't> {
         self.queue(this);
     }
 
-    #[cfg(striped)]
     fn queue(&mut self, p: Pending<'t>) {
         if !self.pli.survives_forward(p.fwd_sc, p.filtersc) {
             self.pool.push(p.parse);
@@ -306,7 +267,6 @@ impl<'t> Scanner<'_, 't> {
         }
     }
 
-    #[cfg(striped)]
     fn report(&mut self, p: Pending<'t>, definition: Definition) {
         let counted = self.pli.n_targets;
         self.pli.n_targets = p.counted;
@@ -325,7 +285,6 @@ impl<'t> Scanner<'_, 't> {
         self.pool.push(p.parse);
     }
 
-    #[cfg(striped)]
     fn finish(mut self) -> Scan {
         if let Some(mut last) = self.forward_held.take() {
             last.parse.fwd.resize_parser(self.om.m, last.sq.n);
@@ -365,7 +324,6 @@ impl<'t> Scanner<'_, 't> {
     }
 }
 
-#[cfg(striped)]
 fn backward_lane<'p>(p: &'p mut Pending) -> Backward<'p> {
     Backward::new(
         &p.sq.dsq,

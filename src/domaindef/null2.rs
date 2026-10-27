@@ -1,7 +1,6 @@
 use crate::alphabet::{Alphabet, Dsq};
 use crate::util::cmath::c_logf_to_f32;
 
-#[cfg(striped)]
 pub(super) fn null2_by_trace_striped(
     om: &crate::simd::oprofile::OProfile,
     tr: &crate::trace::Trace,

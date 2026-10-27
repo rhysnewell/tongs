@@ -15,14 +15,6 @@ use tongs::msa;
 use tongs::profile::{self, Profile, P7_UNILOCAL};
 use tongs::sequence::{self, Sequence, SequenceFormat};
 use tongs::trace::State;
-#[cfg(not(striped))]
-use tongs::{
-    dp::generic_backward::g_backward,
-    dp::generic_decoding::g_decoding,
-    dp::generic_fwdback::g_forward,
-    dp::generic_optacc::{g_oa_trace, g_optimal_accuracy},
-};
-#[cfg(striped)]
 use tongs::{
     simd::oprofile::{OProfile, P7O_C, P7O_J, P7O_LOOP, P7O_N},
     simd::probmx::{p_decoding_to_gmx, ProbMx},
@@ -521,17 +513,11 @@ fn align_traces(
     bg: &Bg,
     sequences: &[Sequence],
 ) -> Vec<AlignedTrace> {
-    #[cfg(striped)]
     {
         align_traces_optimized(hmm, abc, bg, sequences)
     }
-    #[cfg(not(striped))]
-    {
-        return align_traces_generic(hmm, abc, bg, sequences);
-    }
 }
 
-#[cfg(striped)]
 fn align_traces_optimized(
     hmm: &tongs::hmm::Hmm,
     abc: &Alphabet,
@@ -571,42 +557,6 @@ fn align_traces_optimized(
         ];
         p_decoding_to_gmx(&fwd, &bck, hmm.m, njc_loop, &mut pp_gmx);
         let pp_z = trace_posteriors(&tr, &pp_gmx);
-        out.push((tr, pp_z));
-    }
-    out
-}
-
-#[cfg(not(striped))]
-fn align_traces_generic(
-    hmm: &tongs::hmm::Hmm,
-    abc: &Alphabet,
-    bg: &Bg,
-    sequences: &[Sequence],
-) -> Vec<AlignedTrace> {
-    // Configure the (L-independent) profile scores ONCE; only the length model
-    // is updated per sequence via reconfig_length. Mirrors C p7_tracealign_Seqs,
-    // which calls p7_ProfileConfig once and p7_ReconfigLength per target.
-    let mut gm = Profile::new(hmm.m, abc);
-    profile::profile_config(hmm, bg, &mut gm, 100, P7_UNILOCAL);
-    let mut fwd = Gmx::new(hmm.m, 0);
-    let mut bck = Gmx::new(hmm.m, 0);
-    let mut pp = Gmx::new(hmm.m, 0);
-    let mut oa = Gmx::new(hmm.m, 0);
-
-    let mut out = Vec::with_capacity(sequences.len());
-    for sq in sequences {
-        profile::reconfig_length(&mut gm, sq.n as i32);
-        fwd.grow_to(hmm.m, sq.n);
-        bck.grow_to(hmm.m, sq.n);
-        pp.grow_to(hmm.m, sq.n);
-        oa.grow_to(hmm.m, sq.n);
-
-        g_forward(&sq.dsq, sq.n, &gm, &mut fwd);
-        g_backward(&sq.dsq, sq.n, &gm, &mut bck);
-        g_decoding(&gm, &fwd, &bck, &mut pp);
-        g_optimal_accuracy(&gm, &pp, &mut oa);
-        let tr = g_oa_trace(&gm, &pp, &oa);
-        let pp_z = trace_posteriors(&tr, &pp);
         out.push((tr, pp_z));
     }
     out

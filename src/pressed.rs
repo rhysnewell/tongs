@@ -10,7 +10,6 @@ use crate::alphabet::AlphabetType;
 use crate::errors::{HmmerError, HmmerResult};
 use crate::hmm::Hmm;
 use crate::hmmfile_binary;
-#[cfg(striped)]
 use crate::simd::oprofile::AlignedF32x4;
 use crate::simd::oprofile::{nqb, nqf, nqw, OProfile};
 
@@ -1278,12 +1277,10 @@ pub fn oprofile_from_pressed_records(
         }
     }
 
-    #[cfg(striped)]
     let rfv_a: Vec<Vec<AlignedF32x4>> = rfv
         .iter()
         .map(|rows| rows.iter().copied().map(AlignedF32x4::from_array).collect())
         .collect();
-    #[cfg(striped)]
     let tfv_a: Vec<AlignedF32x4> = tfv.iter().copied().map(AlignedF32x4::from_array).collect();
 
     let ssv = crate::simd::ssv::SsvProfile::new(&sbv, msv.m);
@@ -1308,9 +1305,7 @@ pub fn oprofile_from_pressed_records(
         ncj_roundoff: profile.ncj_roundoff,
         rfv: std::sync::Arc::new(rfv),
         tfv: std::sync::Arc::new(tfv),
-        #[cfg(striped)]
         rfv_a: std::sync::Arc::new(rfv_a),
-        #[cfg(striped)]
         tfv_a: std::sync::Arc::new(tfv_a),
         xf: profile.xf,
         m: msv.m,
@@ -1534,7 +1529,6 @@ mod tests {
         assert_eq!(actual.compo, expected.compo);
     }
 
-    #[cfg(striped)]
     fn msv_score(result: crate::simd::msv_filter::MsvResult) -> Option<u32> {
         match result {
             crate::simd::msv_filter::MsvResult::Ok(sc) => Some(sc.to_bits()),
@@ -1542,7 +1536,6 @@ mod tests {
         }
     }
 
-    #[cfg(striped)]
     fn vit_score(result: crate::simd::vit_filter::VitResult) -> Option<u32> {
         match result {
             crate::simd::vit_filter::VitResult::Ok(sc) => Some(sc.to_bits()),
@@ -2269,7 +2262,6 @@ mod tests {
         );
     }
 
-    #[cfg(striped)]
     #[test]
     fn reconstructed_oprofile_scores_like_converted_profile() {
         let hmm = fn3_hmm();

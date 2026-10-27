@@ -6,7 +6,6 @@ use crate::alphabet::Dsq;
 use crate::simd::oprofile::{nqb, OProfile};
 use crate::simd::ssv::SsvResult;
 
-#[cfg(striped)]
 use crate::simd::sse::*;
 
 /// Result of the MSV filter: either a finite score or a saturating overflow.

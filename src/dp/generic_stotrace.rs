@@ -10,9 +10,7 @@ use crate::trace::{State, Trace};
 use crate::util::random::MersenneTwister;
 use crate::util::vectorops::{f_lognorm, f_norm};
 
-#[cfg(striped)]
 use crate::simd::oprofile::*;
-#[cfg(striped)]
 use crate::simd::probmx::{ProbMx, PXB, PXC, PXE, PXJ, PXN};
 
 /// Sample a stochastic traceback directly from a SIMD probability-space Forward matrix.
@@ -20,7 +18,6 @@ use crate::simd::probmx::{ProbMx, PXB, PXC, PXE, PXJ, PXN};
 /// Convenience wrapper that allocates a `Trace` and forwards to
 /// `stochastic_trace_pmx_into`. Works on the striped `ProbMx` produced by the
 /// SIMD Forward parser.
-#[cfg(striped)]
 pub fn stochastic_trace_pmx(
     rng: &mut MersenneTwister,
     l: usize,
@@ -37,7 +34,6 @@ pub fn stochastic_trace_pmx(
 /// Samples one path from the posterior alignment distribution and appends it
 /// to `tr` (which is cleared first). Reverses the appended states so the
 /// trace reads `S..T` on return.
-#[cfg(striped)]
 pub fn stochastic_trace_pmx_into(
     rng: &mut MersenneTwister,
     l: usize,
@@ -96,7 +92,6 @@ pub fn stochastic_trace_pmx_into(
     tr.i.reverse();
 }
 
-#[cfg(striped)]
 struct Striped<'a> {
     q: usize,
     width: usize,
@@ -108,7 +103,6 @@ struct Striped<'a> {
     m: usize,
 }
 
-#[cfg(striped)]
 impl<'a> Striped<'a> {
     fn new(om: &'a OProfile, ox: &'a ProbMx) -> Self {
         Striped {
@@ -148,7 +142,6 @@ impl<'a> Striped<'a> {
     }
 }
 
-#[cfg(striped)]
 fn select_m_pmx(rng: &mut MersenneTwister, sx: &Striped, i: usize, k: usize) -> State {
     let prev_k = k - 1;
     let (m, d, ins) = match prev_k > 0 {
@@ -167,7 +160,6 @@ fn select_m_pmx(rng: &mut MersenneTwister, sx: &Striped, i: usize, k: usize) -> 
     }
 }
 
-#[cfg(striped)]
 fn select_d_pmx(rng: &mut MersenneTwister, sx: &Striped, i: usize, k: usize) -> State {
     let prev_k = k - 1;
     let (m, d, _) = sx.mdi(i, prev_k);
@@ -179,7 +171,6 @@ fn select_d_pmx(rng: &mut MersenneTwister, sx: &Striped, i: usize, k: usize) -> 
     }
 }
 
-#[cfg(striped)]
 fn select_i_pmx(rng: &mut MersenneTwister, sx: &Striped, i: usize, k: usize) -> State {
     let (m, _, ins) = sx.mdi(i - 1, k);
     let mi = m * sx.t(k, P7O_MI);
@@ -190,7 +181,6 @@ fn select_i_pmx(rng: &mut MersenneTwister, sx: &Striped, i: usize, k: usize) -> 
     }
 }
 
-#[cfg(striped)]
 fn select_c_pmx(rng: &mut MersenneTwister, sx: &Striped, i: usize) -> State {
     let c = sx.x(i - 1, PXC) * sx.xf[P7O_C][P7O_LOOP];
     let e = sx.x(i, PXE) * sx.xf[P7O_E][P7O_MOVE] * sx.row_scale[i];
@@ -200,7 +190,6 @@ fn select_c_pmx(rng: &mut MersenneTwister, sx: &Striped, i: usize) -> State {
     }
 }
 
-#[cfg(striped)]
 fn select_j_pmx(rng: &mut MersenneTwister, sx: &Striped, i: usize) -> State {
     let j = sx.x(i - 1, PXJ) * sx.xf[P7O_J][P7O_LOOP];
     let e = sx.x(i, PXE) * sx.xf[P7O_E][P7O_LOOP] * sx.row_scale[i];
@@ -210,7 +199,6 @@ fn select_j_pmx(rng: &mut MersenneTwister, sx: &Striped, i: usize) -> State {
     }
 }
 
-#[cfg(striped)]
 fn select_b_pmx(rng: &mut MersenneTwister, sx: &Striped, i: usize) -> State {
     let n = sx.x(i, PXN) * sx.xf[P7O_N][P7O_MOVE];
     let j = sx.x(i, PXJ) * sx.xf[P7O_J][P7O_MOVE];
@@ -220,7 +208,6 @@ fn select_b_pmx(rng: &mut MersenneTwister, sx: &Striped, i: usize) -> State {
     }
 }
 
-#[cfg(striped)]
 fn select_e_pmx(rng: &mut MersenneTwister, sx: &Striped, i: usize, ret_k: &mut usize) -> State {
     let roll = rng.next_f64();
     let norm = (1.0 / sx.x(i, PXE) as f64) as f32;
@@ -247,7 +234,6 @@ fn select_e_pmx(rng: &mut MersenneTwister, sx: &Striped, i: usize, ret_k: &mut u
     State::M
 }
 
-#[cfg(striped)]
 fn choose_probs<const N: usize>(rng: &mut MersenneTwister, mut probs: [f32; N]) -> usize {
     f_norm(&mut probs);
     rng.sample_discrete(&probs)

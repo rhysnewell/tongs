@@ -38,7 +38,6 @@ pub(super) fn unbiased_byteify(scale_b: f32, sc: f32) -> u8 {
     }
 }
 
-#[cfg(striped)]
 pub(super) unsafe fn esl_sse_expf4(x: [f32; 4]) -> [f32; 4] {
     use crate::simd::sse::*;
 
@@ -101,72 +100,6 @@ pub(super) unsafe fn esl_sse_expf4(x: [f32; 4]) -> [f32; 4] {
     let mut out = [0.0_f32; 4];
     _mm_storeu_ps(out.as_mut_ptr(), y);
     out
-}
-
-/// Scalar fallback for `esl_sse_expf4` on non-x86 builds.
-#[cfg(not(striped))]
-pub(super) fn esl_sse_expf4(x: [f32; 4]) -> [f32; 4] {
-    x.map(esl_sse_expf_lane)
-}
-
-/// Scalar fallback for one lane of Easel's `esl_sse_expf()`. Uses the same
-/// Cephes minimax polynomial as the SSE version for bitwise parity.
-#[cfg(not(striped))]
-#[inline]
-pub(super) fn esl_sse_expf_lane(mut x: f32) -> f32 {
-    const CEPHES_P0: f32 = 1.9875691500e-4;
-    const CEPHES_P1: f32 = 1.3981999507e-3;
-    const CEPHES_P2: f32 = 8.3334519073e-3;
-    const CEPHES_P3: f32 = 4.1665795894e-2;
-    const CEPHES_P4: f32 = 1.6666665459e-1;
-    const CEPHES_P5: f32 = 5.0000001201e-1;
-    const C0: f32 = 0.693359375;
-    const C1: f32 = -2.12194440e-4;
-    const LOG2R: f32 = 1.44269504088896341_f32;
-    const MAXLOGF: f32 = 88.3762626647949;
-    const MINLOGF: f32 = -88.3762626647949;
-
-    if x > MAXLOGF {
-        return f32::INFINITY;
-    }
-    if x <= MINLOGF {
-        return 0.0;
-    }
-
-    let mut fx = x * LOG2R;
-    fx += 0.5;
-    let mut k = fx as i32;
-    let tmp = k as f32;
-    if tmp > fx {
-        fx = tmp - 1.0;
-        k -= 1;
-    } else {
-        fx = tmp;
-    }
-
-    let tmp = fx * C0;
-    let z = fx * C1;
-    x -= tmp;
-    x -= z;
-    let z = x * x;
-
-    let mut y = CEPHES_P0;
-    y *= x;
-    y += CEPHES_P1;
-    y *= x;
-    y += CEPHES_P2;
-    y *= x;
-    y += CEPHES_P3;
-    y *= x;
-    y += CEPHES_P4;
-    y *= x;
-    y += CEPHES_P5;
-    y *= z;
-    y += x;
-    y += 1.0;
-
-    let pow2 = f32::from_bits(((k + 127) as u32) << 23);
-    y * pow2
 }
 
 pub(super) struct MfConversion {
@@ -378,13 +311,8 @@ pub(super) fn fb_conversion(gm: &Profile) -> FbConversion {
                     f32::NEG_INFINITY
                 };
             }
-            #[cfg(striped)]
             {
                 rfv[x][q] = unsafe { esl_sse_expf4(tmp) };
-            }
-            #[cfg(not(striped))]
-            {
-                rfv[x][q] = esl_sse_expf4(tmp);
             }
         }
     }
@@ -412,13 +340,8 @@ pub(super) fn fb_conversion(gm: &Profile) -> FbConversion {
                     f32::NEG_INFINITY
                 };
             }
-            #[cfg(striped)]
             {
                 tfv[j] = unsafe { esl_sse_expf4(tmp) };
-            }
-            #[cfg(not(striped))]
-            {
-                tfv[j] = esl_sse_expf4(tmp);
             }
             j += 1;
         }
@@ -434,13 +357,8 @@ pub(super) fn fb_conversion(gm: &Profile) -> FbConversion {
                 f32::NEG_INFINITY
             };
         }
-        #[cfg(striped)]
         {
             tfv[j] = unsafe { esl_sse_expf4(tmp) };
-        }
-        #[cfg(not(striped))]
-        {
-            tfv[j] = esl_sse_expf4(tmp);
         }
         j += 1;
     }

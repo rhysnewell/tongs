@@ -1,22 +1,15 @@
 pub mod oprofile;
-#[cfg(striped)]
 pub mod optacc;
 
-#[cfg(striped)]
 pub mod bck_filter;
 pub mod fm_ssv;
-#[cfg(striped)]
 pub mod fwd_filter;
-#[cfg(striped)]
 pub mod msv_filter;
-#[cfg(striped)]
 pub mod probmx;
-#[cfg(striped)]
 pub mod ssv;
 pub mod ssv_longtarget;
 #[cfg(target_arch = "x86_64")]
 pub mod vit_avx2;
-#[cfg(striped)]
 pub mod vit_filter;
 
 #[cfg(test)]
