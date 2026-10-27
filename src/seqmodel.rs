@@ -90,7 +90,7 @@ pub fn seqmodel(
     hmm.checksum = 0;
     // C also calls p7_hmm_SetCtime() here. This port leaves `ctime` unset on
     // every build path, not just this one, so that written models stay
-    // byte-reproducible; see TODO.md.
+    // byte-reproducible.
 
     hmm
 }

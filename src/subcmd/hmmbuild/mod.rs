@@ -73,7 +73,7 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
         if let Some(path) = args.mxfile.as_ref() {
             std::fs::File::open(path).unwrap_or_else(|_| {
                 // C reports a missing alignment before this check (p7_builder.c:307).
-                // This port checks the score system first. See TODO.md.
+                // This port checks the score system first.
                 eprintln!(
                     "\nError: Failed to set single query seq score system:\nFailed to find or open matrix file {}\n",
                     path.display()
