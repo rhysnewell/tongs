@@ -51,8 +51,10 @@ unsafe fn hmax_ps(v: __m128) -> f32 {
 }
 
 mod decode;
+mod expect;
 mod fill;
 mod trace;
 
+pub use expect::Expectation;
 pub use fill::decode_and_fill;
 pub use trace::{oa_trace_coords_pmx, oa_trace_pmx};

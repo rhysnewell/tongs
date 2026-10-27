@@ -94,6 +94,8 @@ pub(crate) struct DomainSimdScratch {
     pp_pmx: crate::simd::probmx::ProbMx,
     oa_pmx: crate::simd::probmx::ProbMx,
     region_pmx: Option<crate::simd::probmx::ProbMx>,
+    pp_cells: Vec<std::arch::x86_64::__m128>,
+    expected: crate::simd::optacc::Expectation,
     null2: Vec<f32>,
     exp_m: Vec<f32>,
     exp_i: Vec<f32>,
@@ -120,6 +122,8 @@ impl DomainSimdScratch {
             pp_pmx: crate::simd::probmx::ProbMx::new_full(0, 0),
             oa_pmx: crate::simd::probmx::ProbMx::new_full(0, 0),
             region_pmx: None,
+            pp_cells: Vec::new(),
+            expected: Default::default(),
             null2: Vec::new(),
             exp_m: Vec::new(),
             exp_i: Vec::new(),
@@ -530,7 +534,6 @@ fn score_domain_envelope(
                 use crate::simd::oprofile::{P7O_C, P7O_J, P7O_LOOP, P7O_N};
                 use crate::simd::probmx::{
                     p_decoding_to_gmx, p_null2_odds_from_omx_expectation_reuse,
-                    p_null2_odds_from_posteriors_reuse,
                 };
 
                 {
@@ -600,6 +603,9 @@ fn score_domain_envelope(
                                 env_om,
                                 &mut scratch.pp_pmx,
                                 &mut scratch.oa_pmx,
+                                &mut scratch.pp_cells,
+                                (!null2_is_done && !make_alignment_display)
+                                    .then_some(&mut scratch.expected),
                             ));
                             simd_oa_coords = crate::simd::optacc::oa_trace_coords_pmx(
                                 env_om,
@@ -629,14 +635,14 @@ fn score_domain_envelope(
                     }
                     if !null2_is_done {
                         if make_alignment && !make_alignment_display {
-                            p_null2_odds_from_posteriors_reuse(
-                                &scratch.pp_pmx,
-                                gm.abc_k,
-                                &env_om.rfv,
-                                &mut scratch.null2,
-                                &mut scratch.exp_m,
-                                &mut scratch.exp_i,
-                            );
+                            unsafe {
+                                scratch.expected.null2(
+                                    env_len,
+                                    gm.abc_k,
+                                    &env_om.rfv,
+                                    &mut scratch.null2,
+                                );
+                            }
                         } else {
                             p_null2_odds_from_omx_expectation_reuse(
                                 &scratch.fwd_pmx,
@@ -990,6 +996,8 @@ fn score_domain_envelope(
                                     &trim_om,
                                     &mut scratch.pp_pmx,
                                     &mut scratch.oa_pmx,
+                                    &mut scratch.pp_cells,
+                                    None,
                                 )
                             };
                             let trim_tr = unsafe {

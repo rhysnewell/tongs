@@ -23,16 +23,19 @@ impl<'a> Decoding<'a> {
         bck: &'a ProbMx,
         om: &'a OProfile,
         pp: &mut ProbMx,
+        cells: &mut Vec<__m128>,
     ) -> Self {
         let l = fwd.l;
         let m = om.m;
-        pp.resize_full(m, l);
+        pp.resize_parser(l);
 
         let q = fwd.q_count();
         let row_width = fwd.striped_row_width();
         let fdp = fwd.striped_dp.as_ptr().add(fwd.striped_dp_offset);
         let bdp = bck.striped_dp.as_ptr().add(bck.striped_dp_offset);
-        let pdp = pp.striped_dp.as_mut_ptr().add(pp.striped_dp_offset);
+        cells.clear();
+        cells.resize(3 * q, _mm_setzero_ps());
+        let pdp = cells.as_mut_ptr().cast::<f32>();
         let fx = fwd.xmx.as_ptr();
         let bx = bck.xmx.as_ptr();
         let px = pp.xmx.as_mut_ptr();
@@ -45,12 +48,6 @@ impl<'a> Decoding<'a> {
         pp.m = m;
         pp.l = l;
 
-        // Row 0 is zero posterior probability.
-        for qi in 0..q {
-            store_cell(pdp, qi, OM_M, _mm_setzero_ps());
-            store_cell(pdp, qi, OM_D, _mm_setzero_ps());
-            store_cell(pdp, qi, OM_I, _mm_setzero_ps());
-        }
         for s in 0..NXCELLS {
             *px.add(s) = 0.0;
         }
@@ -94,7 +91,7 @@ impl<'a> Decoding<'a> {
         let scalev = _mm_set1_ps(dp_scale);
         let frow = fdp.add(i * row_width);
         let brow = bdp.add(i * row_width);
-        let prow = pdp.add(i * row_width);
+        let prow = pdp;
 
         for qi in 0..q {
             let fm = load_cell(frow, qi, OM_M);

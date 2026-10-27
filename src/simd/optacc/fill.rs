@@ -16,14 +16,19 @@ pub(super) struct Fill<'a> {
 
 impl<'a> Fill<'a> {
     #[target_feature(enable = "sse2")]
-    pub(super) unsafe fn start(om: &'a OProfile, pp: &ProbMx, ox: &mut ProbMx) -> Self {
+    pub(super) unsafe fn start(
+        om: &'a OProfile,
+        pp: &ProbMx,
+        ox: &mut ProbMx,
+        cells: &[__m128],
+    ) -> Self {
         let m = om.m;
         let l = pp.l;
         ox.resize_full(m, l);
 
-        let q = pp.q_count();
-        let row_width = pp.striped_row_width();
-        let ppdp = pp.striped_dp.as_ptr().add(pp.striped_dp_offset);
+        let q = ox.q_count();
+        let row_width = ox.striped_row_width();
+        let ppdp = cells.as_ptr().cast::<f32>();
         let pdp_x = pp.xmx.as_ptr();
         let oxdp = ox.striped_dp.as_mut_ptr().add(ox.striped_dp_offset);
         let oxx = ox.xmx.as_mut_ptr();
@@ -73,7 +78,7 @@ impl<'a> Fill<'a> {
         let infv = _mm_set1_ps(f32::NEG_INFINITY);
         let dpp = oxdp.add((i - 1) * row_width);
         let dpc = oxdp.add(i * row_width);
-        let ppp = ppdp.add(i * row_width);
+        let ppp = ppdp;
         let mut dcv = infv;
         let mut xev = infv;
         let xbv = _mm_set1_ps(*oxx.add((i - 1) * NXCELLS + PXB));
@@ -195,7 +200,8 @@ impl<'a> Fill<'a> {
     }
 }
 
-// Decoding a row and filling it straight away keeps the posterior row in cache for the fill.
+// The fill reads each posterior row as it is decoded, and the expected emission counts are summed
+// row by row, so the cells of a full posterior matrix are never stored.
 #[target_feature(enable = "sse2")]
 pub unsafe fn decode_and_fill(
     fwd: &ProbMx,
@@ -203,12 +209,17 @@ pub unsafe fn decode_and_fill(
     om: &OProfile,
     pp: &mut ProbMx,
     ox: &mut ProbMx,
+    cells: &mut Vec<__m128>,
+    mut expected: Option<&mut Expectation>,
 ) -> f32 {
-    let mut decoding = Decoding::start(fwd, bck, om, pp);
-    let fill = Fill::start(om, pp, ox);
+    let mut decoding = Decoding::start(fwd, bck, om, pp, cells);
+    let fill = Fill::start(om, pp, ox, cells);
     for i in 1..=fwd.l {
         decoding.row(i);
         fill.row(i);
+        if let Some(expected) = expected.as_deref_mut() {
+            expected.add_row(i, cells, &pp.xmx);
+        }
     }
     fill.finish()
 }

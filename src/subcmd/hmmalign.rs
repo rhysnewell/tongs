@@ -546,13 +546,13 @@ fn align_traces_optimized(
     let mut pp = ProbMx::new_full(hmm.m, 0);
     let mut oa = ProbMx::new_full(hmm.m, 0);
     let mut pp_gmx = Gmx::new(hmm.m, 0);
+    let mut cells = Vec::new();
 
     let mut out = Vec::with_capacity(sequences.len());
     for sq in sequences {
         om.reconfig_length(sq.n as i32);
         fwd.resize_full(hmm.m, sq.n);
         bck.resize_full(hmm.m, sq.n);
-        pp.resize_full(hmm.m, sq.n);
         oa.resize_full(hmm.m, sq.n);
         pp_gmx.grow_to(hmm.m, sq.n);
 
@@ -560,7 +560,9 @@ fn align_traces_optimized(
             unsafe { tongs::simd::fwd_filter::forward_parser_pmx(&sq.dsq, sq.n, &om, &mut fwd) };
         unsafe {
             tongs::simd::bck_filter::backward_parser_pmx(&sq.dsq, sq.n, &om, fwd_sc, &mut bck);
-            tongs::simd::optacc::decode_and_fill(&fwd, &bck, &om, &mut pp, &mut oa);
+            tongs::simd::optacc::decode_and_fill(
+                &fwd, &bck, &om, &mut pp, &mut oa, &mut cells, None,
+            );
         }
         let tr = unsafe { tongs::simd::optacc::oa_trace_pmx(&om, &pp, &oa) };
         let njc_loop = [
