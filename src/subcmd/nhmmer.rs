@@ -30,9 +30,9 @@ use tongs::pipeline::Pipeline;
 use tongs::prior::PriorStrategy;
 use tongs::profile::{self, Profile, P7_LOCAL};
 use tongs::sequence::{self, Sequence};
-use tongs::util::cmath::c_logf_to_f32;
 use tongs::simd::oprofile::OProfile;
 use tongs::tophits::TopHits;
+use tongs::util::cmath::c_logf_to_f32;
 use tongs::util::cmath::{c_exp_f64, c_log_f64};
 
 const MAKEHMMERDB_INDEX_MAGIC: &[u8] = b"HMMERDB_INDEXES\0";
@@ -9705,8 +9705,7 @@ fn nhmmer_longtarget_accel_available() -> bool {
 }
 
 fn nhmmer_longtarget_unsupported_message() -> String {
-    "nhmmer/nhmmscan long-target heuristic filters require an x86_64 or aarch64 build"
-        .to_string()
+    "nhmmer/nhmmscan long-target heuristic filters require an x86_64 or aarch64 build".to_string()
 }
 
 fn ensure_nhmmer_longtarget_accel_available() -> Result<(), String> {

@@ -51,7 +51,11 @@ impl<'a> BackParse<'a> {
     }
 }
 
-pub unsafe fn backward_parser_pair<'p>(om: &OProfile, a: &mut BackParse<'p>, b: &mut BackParse<'p>) {
+pub unsafe fn backward_parser_pair<'p>(
+    om: &OProfile,
+    a: &mut BackParse<'p>,
+    b: &mut BackParse<'p>,
+) {
     last_row(om, a);
     last_row(om, b);
     let common = a.l.min(b.l);
@@ -193,8 +197,14 @@ unsafe fn row<const N: usize>(om: &OProfile, lanes: [&mut BackParse; N], k: usiz
     for t in 0..N {
         let lane = &mut *lanes[t];
         let mut sum = x_bv[t];
-        sum = _mm_add_ps(sum, _mm_shuffle_ps::<{ super::shuffle_mask(0, 3, 2, 1) }>(sum, sum));
-        sum = _mm_add_ps(sum, _mm_shuffle_ps::<{ super::shuffle_mask(1, 0, 3, 2) }>(sum, sum));
+        sum = _mm_add_ps(
+            sum,
+            _mm_shuffle_ps::<{ super::shuffle_mask(0, 3, 2, 1) }>(sum, sum),
+        );
+        sum = _mm_add_ps(
+            sum,
+            _mm_shuffle_ps::<{ super::shuffle_mask(1, 0, 3, 2) }>(sum, sum),
+        );
         _mm_store_ss(&mut lane.x_b, sum);
         let xf = &lane.xf;
         lane.x_c *= xf[P7O_C][P7O_LOOP];
@@ -303,8 +313,14 @@ unsafe fn first_row(om: &OProfile, lane: &mut BackParse) {
         let mpv = _mm_mul_ps(*dp.add(qi * 3), rfv(om, x1, qi));
         x_bv = _mm_add_ps(x_bv, _mm_mul_ps(mpv, tfv(om, qi, 0)));
     }
-    x_bv = _mm_add_ps(x_bv, _mm_shuffle_ps::<{ super::shuffle_mask(0, 3, 2, 1) }>(x_bv, x_bv));
-    x_bv = _mm_add_ps(x_bv, _mm_shuffle_ps::<{ super::shuffle_mask(1, 0, 3, 2) }>(x_bv, x_bv));
+    x_bv = _mm_add_ps(
+        x_bv,
+        _mm_shuffle_ps::<{ super::shuffle_mask(0, 3, 2, 1) }>(x_bv, x_bv),
+    );
+    x_bv = _mm_add_ps(
+        x_bv,
+        _mm_shuffle_ps::<{ super::shuffle_mask(1, 0, 3, 2) }>(x_bv, x_bv),
+    );
     _mm_store_ss(&mut lane.x_b, x_bv);
     lane.x_n = lane.x_b * lane.xf[P7O_N][P7O_MOVE] + lane.x_n * lane.xf[P7O_N][P7O_LOOP];
     let pmx = &mut *lane.pmx;

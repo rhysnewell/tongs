@@ -1,7 +1,11 @@
 //! SSE-optimized Backward parser (float precision, probability space).
 //! Adapted from hmmer-pure-rs bck_engine() which closely follows C HMMER's
 //! backward_engine() in impl_sse/fwdback.c.
-#![allow(clippy::needless_borrow, clippy::too_many_arguments, clippy::missing_safety_doc)]
+#![allow(
+    clippy::needless_borrow,
+    clippy::too_many_arguments,
+    clippy::missing_safety_doc
+)]
 
 #[cfg(striped)]
 use crate::simd::sse::*;

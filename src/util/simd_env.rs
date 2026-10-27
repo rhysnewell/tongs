@@ -47,13 +47,17 @@ unsafe fn write_mode(mode: usize) {
 #[cfg(target_arch = "aarch64")]
 unsafe fn read_mode() -> usize {
     let fpcr: usize;
-    unsafe { std::arch::asm!("mrs {}, fpcr", out(reg) fpcr, options(nomem, nostack, preserves_flags)) };
+    unsafe {
+        std::arch::asm!("mrs {}, fpcr", out(reg) fpcr, options(nomem, nostack, preserves_flags))
+    };
     fpcr
 }
 
 #[cfg(target_arch = "aarch64")]
 unsafe fn write_mode(mode: usize) {
-    unsafe { std::arch::asm!("msr fpcr, {}", in(reg) mode, options(nomem, nostack, preserves_flags)) };
+    unsafe {
+        std::arch::asm!("msr fpcr, {}", in(reg) mode, options(nomem, nostack, preserves_flags))
+    };
 }
 
 #[cfg(not(striped))]

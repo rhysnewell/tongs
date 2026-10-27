@@ -80,7 +80,9 @@ pub fn logf(x: f32) -> f32 {
         if ix & 0x8000_0000 != 0 || ix.wrapping_mul(2) >= 0xff00_0000 {
             return (x - x) / (x - x);
         }
-        ix = (x * f32::from_bits(0x4b00_0000)).to_bits().wrapping_sub(23 << 23);
+        ix = (x * f32::from_bits(0x4b00_0000))
+            .to_bits()
+            .wrapping_sub(23 << 23);
     }
     let tmp = ix.wrapping_sub(0x3f33_0000);
     let i = ((tmp >> 19) % 16) as usize;

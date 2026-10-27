@@ -220,7 +220,11 @@ impl Diagonals {
     fn new(diagonals: impl Iterator<Item = i64>) -> Self {
         let of = diagonals.collect::<Vec<_>>();
         let first = of.iter().copied().min().unwrap_or(0);
-        let span = of.iter().map(|&d| (d - first) as usize + 1).max().unwrap_or(0);
+        let span = of
+            .iter()
+            .map(|&d| (d - first) as usize + 1)
+            .max()
+            .unwrap_or(0);
         let mut len = vec![0usize; span];
         for &d in &of {
             len[(d - first) as usize] += 1;

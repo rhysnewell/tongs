@@ -6,7 +6,9 @@ use crate::alphabet::Alphabet;
 use crate::bg::Bg;
 use crate::hmm::Hmm;
 use crate::pipeline::Pipeline;
-use crate::profile::{profile_config, reconfig_length, Profile, P7P_NXSTATES, P7P_NXTRANS, P7_LOCAL};
+use crate::profile::{
+    profile_config, reconfig_length, Profile, P7P_NXSTATES, P7P_NXTRANS, P7_LOCAL,
+};
 use crate::sequence::Sequence;
 use crate::simd::oprofile::{OProfile, P7O_NXSTATES, P7O_NXTRANS};
 use crate::tophits::{Hit, TopHits};
@@ -152,9 +154,13 @@ impl<'a> Query<'a> {
                 {
                     pli.backward_pair(&om, (partner.sq, partner.kept.xf), (sq, kept.xf));
                 }
-                self.finish(&mut pli, &mut gm, &mut om, &mut bg, &partner, partner_sc, &mut found);
+                self.finish(
+                    &mut pli, &mut gm, &mut om, &mut bg, &partner, partner_sc, &mut found,
+                );
                 pli.take_partner();
-                self.finish(&mut pli, &mut gm, &mut om, &mut bg, &this, this_sc, &mut found);
+                self.finish(
+                    &mut pli, &mut gm, &mut om, &mut bg, &this, this_sc, &mut found,
+                );
             }
             hits.append(&mut found.hits);
         }
@@ -188,7 +194,17 @@ impl<'a> Query<'a> {
         let counted = pli.n_targets;
         pli.n_targets = held.counted;
         held.kept.restore(gm, om, bg);
-        pli.after_forward(gm, om, bg, self.hmm, held.sq, held.kept.null_sc, held.filtersc, fwd_sc, found);
+        pli.after_forward(
+            gm,
+            om,
+            bg,
+            self.hmm,
+            held.sq,
+            held.kept.null_sc,
+            held.filtersc,
+            fwd_sc,
+            found,
+        );
         pli.n_targets = counted.max(held.counted);
     }
 }

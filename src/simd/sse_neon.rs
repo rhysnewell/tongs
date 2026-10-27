@@ -324,7 +324,16 @@ pub fn _mm_shuffle_epi32<const IMM8: i32>(a: __m128i) -> __m128i {
 pub fn _mm_shufflelo_epi16<const IMM8: i32>(a: __m128i) -> __m128i {
     let a: [u16; 8] = unsafe { transmute(a) };
     let m = IMM8 as usize;
-    let r = [a[m & 3], a[(m >> 2) & 3], a[(m >> 4) & 3], a[(m >> 6) & 3], a[4], a[5], a[6], a[7]];
+    let r = [
+        a[m & 3],
+        a[(m >> 2) & 3],
+        a[(m >> 4) & 3],
+        a[(m >> 6) & 3],
+        a[4],
+        a[5],
+        a[6],
+        a[7],
+    ];
     unsafe { transmute(r) }
 }
 

@@ -15,14 +15,20 @@ fn outcome(result: &SsvResult) -> Option<u32> {
 #[test]
 fn shortcut_matches_msv_at_every_lane_width() {
     #[cfg(target_arch = "x86_64")]
-    let widths = if is_x86_feature_detected!("avx2") { vec![16, 32] } else { vec![16] };
+    let widths = if is_x86_feature_detected!("avx2") {
+        vec![16, 32]
+    } else {
+        vec![16]
+    };
     #[cfg(not(target_arch = "x86_64"))]
     let widths = vec![16];
     let mut answered = 0;
     let targets = proteins();
     for (name, mut om) in profiles() {
-        let shortcuts: Vec<_> =
-            widths.iter().map(|&lanes| SsvProfile::striped(&om.sbv, om.m, lanes)).collect();
+        let shortcuts: Vec<_> = widths
+            .iter()
+            .map(|&lanes| SsvProfile::striped(&om.sbv, om.m, lanes))
+            .collect();
         let mut dp = Vec::new();
         for sq in &targets {
             om.reconfig_length(sq.n as i32);

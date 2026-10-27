@@ -275,7 +275,8 @@ impl Pipeline {
     pub(crate) fn take_partner(&mut self) {
         std::mem::swap(&mut self.fwd_pmx, &mut self.pair_pmx);
         let pair = &mut self.pair_bck;
-        self.domain_scratch.trade_backward(&mut pair.pmx, &mut pair.ready);
+        self.domain_scratch
+            .trade_backward(&mut pair.pmx, &mut pair.ready);
     }
 
     pub(crate) fn passes_forward(&self, fwd_sc: f32, filtersc: f32) -> bool {
