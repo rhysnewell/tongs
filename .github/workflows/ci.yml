@@ -5,7 +5,7 @@ on:
   push:
     branches:
       - main
-      - master
+  workflow_dispatch:
 
 jobs:
   build:
@@ -26,5 +26,75 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Build library
-        run: cargo build --lib
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build library and binary
+        run: cargo build --release --locked
+
+  test:
+    name: Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Cache HMMER 3.4 and the pinned Pfam fixtures
+        id: hmmer
+        uses: actions/cache@v4
+        with:
+          path: hmmer
+          key: hmmer-3.4-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/download_testsuite_fixtures.sh') }}
+
+      - name: Build HMMER 3.4
+        if: steps.hmmer.outputs.cache-hit != 'true'
+        run: |
+          curl -fL --retry 3 http://eddylab.org/software/hmmer/hmmer-3.4.tar.gz | tar xz
+          mv hmmer-3.4 hmmer
+          cd hmmer
+          ./configure
+          make -j4
+
+      # The fixture script needs bash 4 associative arrays and sha256sum.
+      - name: Install bash and coreutils
+        if: runner.os == 'macOS' && steps.hmmer.outputs.cache-hit != 'true'
+        run: brew install bash coreutils
+
+      - name: Fetch the pinned Pfam fixtures
+        if: steps.hmmer.outputs.cache-hit != 'true'
+        run: |
+          scripts/download_testsuite_fixtures.sh
+          rm -rf external/pfam_releases
+
+      # real_world_regression_tests and the A2M hmmalign test read external/.
+      # The scripts fill it from current Pfam and UniProt, which are not pinned.
+      - name: Test
+        run: >
+          cargo test --release --locked --lib
+          --test cli_option_rejections
+          --test cli_output_parity
+          --test deep_comparator_probmx
+          --test domain_envelope_tests
+          --test ecoli_sensitivity_tests
+          --test gecco_pyhmmer_regression_tests
+          --test hmmalign_integration_tests
+          --test jackhmmer_integration_tests
+          --test performance_tests
+          --test pfam_equivalence_tests
+          --test phmmer_integration_tests
+          --test pipeline_sensitivity_tests
+          --test rust_hmmsearch_tests
+          -- --skip hmmalign_a2m_preserves_real_fasta_description_like_bundled_c
