@@ -4133,7 +4133,8 @@ fn test_hmmscan_pfam_panel_human_query_max_outputs_match_bundled_c_rows() {
         rust_rows, c_rows,
         "Pfam first12 vs human query hmmscan --acc --max rows diverged from bundled C"
     );
-    assert_eq!(rust_rows.len(), 6);
+    // The panel is the first twelve families of whichever Pfam release was fetched.
+    assert!(!rust_rows.is_empty());
 
     let rust_domains = parse_domtbl_rows(&run_hmmscan_domtblout_with_args(&hmmdb, &query, &args));
     let c_domains = parse_domtbl_rows(&run_c_hmmscan_domtblout_with_args(&hmmdb, &query, &args));
@@ -4141,7 +4142,7 @@ fn test_hmmscan_pfam_panel_human_query_max_outputs_match_bundled_c_rows() {
         rust_domains, c_domains,
         "Pfam first12 vs human query hmmscan --acc --max domain rows diverged from bundled C"
     );
-    assert_eq!(rust_domains.len(), 8);
+    assert!(!rust_domains.is_empty());
 }
 
 #[test]
