@@ -1,5 +1,3 @@
-#![cfg(striped)]
-
 use std::path::Path;
 use tongs::{alphabet::Alphabet, bg::Bg, hmmfile, profile, simd};
 
