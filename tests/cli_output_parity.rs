@@ -4625,7 +4625,7 @@ fn hmmsearch_accepts_fasta_tformat_assertion() {
             "fasta",
             "--noali",
             "hmmer/tutorial/fn3.hmm",
-            "hmmer/testsuite/proteins.faa",
+            "test_data/gecco_proteins.faa",
         ])
         .output()
         .unwrap();
@@ -4636,7 +4636,7 @@ fn hmmsearch_accepts_fasta_tformat_assertion() {
         String::from_utf8_lossy(&output.stderr)
     );
     let stdout = String::from_utf8(output.stdout).unwrap();
-    assert!(stdout.contains("# target sequence database:        hmmer/testsuite/proteins.faa\n"));
+    assert!(stdout.contains("# target sequence database:        test_data/gecco_proteins.faa\n"));
     assert!(stdout.contains("# targ <seqfile> format asserted:  fasta\n"));
     assert!(stdout.contains("Scores for complete sequences"));
 }
@@ -4650,7 +4650,7 @@ fn hmmsearch_preserves_tformat_header_spelling() {
             "FASTA",
             "--noali",
             "hmmer/tutorial/fn3.hmm",
-            "hmmer/testsuite/proteins.faa",
+            "test_data/gecco_proteins.faa",
         ])
         .output()
         .unwrap();
@@ -4661,7 +4661,7 @@ fn hmmsearch_preserves_tformat_header_spelling() {
         String::from_utf8_lossy(&output.stderr)
     );
     let stdout = String::from_utf8(output.stdout).unwrap();
-    assert!(stdout.contains("# target sequence database:        hmmer/testsuite/proteins.faa\n"));
+    assert!(stdout.contains("# target sequence database:        test_data/gecco_proteins.faa\n"));
     assert!(stdout.contains("# targ <seqfile> format asserted:  FASTA\n"));
     assert!(stdout.contains("Scores for complete sequences"));
 }
