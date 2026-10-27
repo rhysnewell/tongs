@@ -62,21 +62,20 @@ pub fn cluster(
     }
 
     let (assignments, nclusters) = single_linkage_assignments(segments, params);
+    let mut clusters = vec![Vec::new(); nclusters];
+    for (idx, &cluster_idx) in assignments.iter().enumerate() {
+        clusters[cluster_idx].push(idx);
+    }
 
-    // For each cluster, compute posterior and C-style consensus endpoints.
     let mut envelopes = Vec::new();
-    for cluster_idx in 0..nclusters {
-        let mut members = Vec::new();
+    for members in clusters {
         let mut trace_count = 0usize;
         let mut last_trace = None;
-        for (idx, segment) in segments.iter().enumerate() {
-            if assignments[idx] == cluster_idx {
-                members.push(idx);
-                if last_trace != Some(segment.trace_idx) {
-                    trace_count += 1;
-                }
-                last_trace = Some(segment.trace_idx);
+        for &idx in &members {
+            if last_trace != Some(segments[idx].trace_idx) {
+                trace_count += 1;
             }
+            last_trace = Some(segments[idx].trace_idx);
         }
         let posterior = trace_count as f32 / ntraces as f32;
 
@@ -158,40 +157,113 @@ pub fn cluster(
         .collect()
 }
 
-/// Single-linkage clustering driver: assign each segment to a cluster id by
-/// flood-filling along `segments_overlap` edges. Mirrors Easel's
-/// `esl_cluster_SingleLinkage()` as called from `p7_spensemble_Cluster`.
+// Segments link only within max_diagdiff of a start or an end diagonal, so each popped segment
+// tests its diagonal neighbours rather than every one left. Links are taken in the order the
+// all-pairs scan finds them, from the top of the available list down, so cluster numbers match it.
 fn single_linkage_assignments(
     segments: &[SegmentPair],
     params: &ClusterParams,
 ) -> (Vec<usize>, usize) {
     let n = segments.len();
     let mut available: Vec<usize> = (0..n).rev().collect();
+    let mut position: Vec<usize> = (0..n).map(|v| n - 1 - v).collect();
+    let mut starts = Diagonals::new(segments.iter().map(|s| s.i as i64 - s.k as i64));
+    let mut ends = Diagonals::new(segments.iter().map(|s| s.j as i64 - s.m as i64));
+    let reach = params.max_diagdiff as i64;
     let mut connected = Vec::with_capacity(n);
+    let mut near = Vec::new();
     let mut assignments = vec![0usize; n];
     let mut nclusters = 0usize;
 
     while let Some(v) = available.pop() {
+        starts.remove(v);
+        ends.remove(v);
         connected.push(v);
         while let Some(v) = connected.pop() {
             assignments[v] = nclusters;
-            let mut idx = available.len();
-            while idx > 0 {
-                idx -= 1;
-                if segments_overlap(&segments[v], &segments[available[idx]], params) {
-                    let w = available[idx];
-                    let last = available.pop().expect("available is non-empty");
-                    if idx < available.len() {
-                        available[idx] = last;
-                    }
-                    connected.push(w);
+            near.clear();
+            starts.near(v, reach, &mut near);
+            ends.near(v, reach, &mut near);
+            near.sort_unstable_by_key(|&w| std::cmp::Reverse(position[w]));
+            near.dedup();
+            for &w in &near {
+                if !segments_overlap(&segments[v], &segments[w], params) {
+                    continue;
                 }
+                let last = available.pop().expect("available is non-empty");
+                if position[w] < available.len() {
+                    available[position[w]] = last;
+                    position[last] = position[w];
+                }
+                starts.remove(w);
+                ends.remove(w);
+                connected.push(w);
             }
         }
         nclusters += 1;
     }
 
     (assignments, nclusters)
+}
+
+// Segments bucketed by one diagonal, each bucket a run of `flat` that shrinks as segments leave.
+struct Diagonals {
+    first: i64,
+    of: Vec<i64>,
+    start: Vec<usize>,
+    len: Vec<usize>,
+    flat: Vec<usize>,
+    slot: Vec<usize>,
+}
+
+impl Diagonals {
+    fn new(diagonals: impl Iterator<Item = i64>) -> Self {
+        let of = diagonals.collect::<Vec<_>>();
+        let first = of.iter().copied().min().unwrap_or(0);
+        let span = of.iter().map(|&d| (d - first) as usize + 1).max().unwrap_or(0);
+        let mut len = vec![0usize; span];
+        for &d in &of {
+            len[(d - first) as usize] += 1;
+        }
+        let mut start = vec![0usize; span];
+        for b in 1..span {
+            start[b] = start[b - 1] + len[b - 1];
+        }
+        let mut fill = start.clone();
+        let mut flat = vec![0usize; of.len()];
+        let mut slot = vec![0usize; of.len()];
+        for (id, &d) in of.iter().enumerate() {
+            let b = (d - first) as usize;
+            flat[fill[b]] = id;
+            slot[id] = fill[b];
+            fill[b] += 1;
+        }
+        Diagonals {
+            first,
+            of,
+            start,
+            len,
+            flat,
+            slot,
+        }
+    }
+
+    fn remove(&mut self, id: usize) {
+        let b = (self.of[id] - self.first) as usize;
+        self.len[b] -= 1;
+        let last = self.start[b] + self.len[b];
+        let moved = self.flat[last];
+        self.flat[self.slot[id]] = moved;
+        self.slot[moved] = self.slot[id];
+    }
+
+    fn near(&self, id: usize, reach: i64, out: &mut Vec<usize>) {
+        let low = (self.of[id] - reach - self.first).max(0) as usize;
+        let high = (self.of[id] + reach - self.first).min(self.len.len() as i64 - 1) as usize;
+        for b in low..=high {
+            out.extend_from_slice(&self.flat[self.start[b]..self.start[b] + self.len[b]]);
+        }
+    }
 }
 
 /// Single-linkage edge predicate: sufficient overlap in both seq and HMM coords,
