@@ -17,7 +17,6 @@ include = [
     "test_data/**",
     "src/data/esl_scorematrix.c",
     "scripts/*.sh",
-    "REAL_WORLD_FIXTURES.md",
     "Cargo.toml",
     "README.md",
     "LICENSE",

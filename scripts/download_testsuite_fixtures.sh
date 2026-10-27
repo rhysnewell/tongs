@@ -114,15 +114,15 @@ decompress_gzip() {
   mv "${output}.tmp" "$output"
 }
 
-# Prefer the bundled C hmmfetch; fall back to this port's `hmmer fetch`, which
+# Prefer the bundled C hmmfetch; fall back to `tongs fetch`, which
 # is verified byte-identical on these fixtures.
 hmmfetch_cmd() {
   if [[ -x hmmer/src/hmmfetch ]]; then
     echo "hmmer/src/hmmfetch"
-  elif [[ -x target/release/hmmer ]]; then
-    echo "target/release/hmmer fetch"
-  elif [[ -x target/debug/hmmer ]]; then
-    echo "target/debug/hmmer fetch"
+  elif [[ -x target/release/tongs ]]; then
+    echo "target/release/tongs fetch"
+  elif [[ -x target/debug/tongs ]]; then
+    echo "target/debug/tongs fetch"
   else
     echo "no hmmfetch found: build hmmer/src/hmmfetch or run 'cargo build --release'" >&2
     return 1

@@ -13,10 +13,4 @@ CLAUDE.md
 .tmp/
 perf.data
 perf.data.old
-tracehash
 external/
-reports/benchmarks/
-reports/audit-*/
-
-# Superseded duplicate mapping filename
-mapping.toml

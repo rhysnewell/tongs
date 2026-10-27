@@ -169,7 +169,4 @@ sha_manifest
 
 cat <<EOF
 New real-world fixtures are ready under $fixture_root.
-
-Run all Rust CLI tools on these fixtures with:
-  scripts/benchmark_new_real_all_tools.sh
 EOF

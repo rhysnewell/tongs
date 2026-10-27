@@ -176,7 +176,4 @@ sha_manifest
 
 cat <<EOF
 Realistic fixtures are ready under $fixture_root.
-
-Run the heavier all-tools workflow with:
-  scripts/benchmark_realistic_all_tools.sh
 EOF

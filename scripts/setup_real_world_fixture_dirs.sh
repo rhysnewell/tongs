@@ -3,26 +3,16 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-mkdir -p \
-  "$repo_root/external/protein_medium/queries" \
-  "$repo_root/external/protein_large/queries" \
-  "$repo_root/external/dna_large/queries"
+mkdir -p "$repo_root/external/protein_medium/queries"
 
 cat <<'EOF'
-Created fixture directories:
-  external/protein_medium/queries
-  external/protein_large/queries
-  external/dna_large/queries
+Created external/protein_medium/queries
 
-Expected dataset filenames:
+Expected files:
   external/protein_medium/uniprot_UP000005640_human.fasta.gz
   external/protein_medium/uniprot_UP000005640_human.fasta
-  external/protein_large/uniprot_sprot.fasta.gz
-  external/protein_large/uniprot_sprot.fasta
-  external/dna_large/ensembl_homo_sapiens_GRCh38_primary_assembly.fa.gz
+  external/protein_medium/queries/sp_O43739_CYH3_HUMAN.fa
 
-The uncompressed protein FASTA files are required for rewindable jackhmmer
-multi-round cases. They should be decompressed from the matching .gz files.
-
-See REAL_WORLD_FIXTURES.md for sources and benchmark commands.
+The proteome is the 20,659-sequence download from https://www.uniprot.org/proteomes/UP000005640.
+C jackhmmer needs the uncompressed copy to rewind between rounds.
 EOF
