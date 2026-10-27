@@ -38,7 +38,8 @@ fn main() -> ExitCode {
         "logo" | "hmmlogo" => subcmd::hmmlogo::run(os_args_to_strings(sub_args_os)),
         "alimask" => subcmd::alimask::run(os_args_to_strings(sub_args_os)),
         "makehmmerdb" => subcmd::makehmmerdb::run(os_args_to_strings(sub_args_os)),
-        "pgmd" | "hmmpgmd" => subcmd::hmmpgmd::run(os_args_to_strings(sub_args_os)),
+        #[cfg(unix)]
+        "pgmd" | "hmmpgmd" =>subcmd::hmmpgmd::run(os_args_to_strings(sub_args_os)),
         "sim" | "hmmsim" => subcmd::hmmsim::run(os_args_to_strings(sub_args_os)),
         "help" | "--help" | "-h" => {
             print_usage();
@@ -99,5 +100,6 @@ fn print_usage() {
     eprintln!("  fetch       Retrieve HMM by name from a file");
     eprintln!("  logo        Generate HMM logo data");
     eprintln!("  alimask     Add mask annotation to alignment");
+    #[cfg(unix)]
     eprintln!("  pgmd        Run minimal HMM database daemon");
 }
