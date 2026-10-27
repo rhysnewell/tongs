@@ -1,6 +1,5 @@
 #![allow(clippy::missing_safety_doc)]
 
-use std::arch::x86_64::*;
 use std::sync::Arc;
 
 use crate::alphabet::Dsq;
@@ -9,18 +8,120 @@ use crate::simd::vit_filter::VitResult;
 
 const LANES: usize = 16;
 
+#[cfg(target_arch = "x86_64")]
+mod wide {
+    use std::arch::x86_64::*;
+
+    pub type Wide = __m256i;
+
+    pub fn available() -> bool {
+        is_x86_feature_detected!("avx2")
+    }
+
+    #[target_feature(enable = "avx2")]
+    #[inline]
+    pub unsafe fn splat(x: i16) -> Wide {
+        _mm256_set1_epi16(x)
+    }
+
+    #[target_feature(enable = "avx2")]
+    #[inline]
+    pub unsafe fn adds(a: Wide, b: Wide) -> Wide {
+        _mm256_adds_epi16(a, b)
+    }
+
+    #[target_feature(enable = "avx2")]
+    #[inline]
+    pub unsafe fn max(a: Wide, b: Wide) -> Wide {
+        _mm256_max_epi16(a, b)
+    }
+
+    #[target_feature(enable = "avx2")]
+    #[inline]
+    pub unsafe fn shifted(v: Wide) -> Wide {
+        let low = _mm256_permute2x128_si256::<0x08>(v, v);
+        _mm256_insert_epi16::<0>(_mm256_alignr_epi8::<14>(v, low), i16::MIN)
+    }
+
+    #[target_feature(enable = "avx2")]
+    #[inline]
+    pub unsafe fn hmax(v: Wide) -> i16 {
+        let mut m = _mm_max_epi16(_mm256_castsi256_si128(v), _mm256_extracti128_si256::<1>(v));
+        m = _mm_max_epi16(m, _mm_srli_si128::<8>(m));
+        m = _mm_max_epi16(m, _mm_srli_si128::<4>(m));
+        m = _mm_max_epi16(m, _mm_srli_si128::<2>(m));
+        _mm_extract_epi16::<0>(m) as i16
+    }
+
+    #[target_feature(enable = "avx2")]
+    #[inline]
+    pub unsafe fn any_gt(a: Wide, b: Wide) -> bool {
+        _mm256_movemask_epi8(_mm256_cmpgt_epi16(a, b)) != 0
+    }
+}
+
+// NEON has thirty-two vector registers, so a register pair carries the sixteen lanes AVX2 does.
+#[cfg(target_arch = "aarch64")]
+mod wide {
+    use std::arch::aarch64::*;
+
+    #[derive(Clone, Copy, Debug)]
+    #[repr(C)]
+    pub struct Wide(int16x8_t, int16x8_t);
+
+    pub fn available() -> bool {
+        true
+    }
+
+    #[inline(always)]
+    pub unsafe fn splat(x: i16) -> Wide {
+        Wide(vdupq_n_s16(x), vdupq_n_s16(x))
+    }
+
+    #[inline(always)]
+    pub unsafe fn adds(a: Wide, b: Wide) -> Wide {
+        Wide(vqaddq_s16(a.0, b.0), vqaddq_s16(a.1, b.1))
+    }
+
+    #[inline(always)]
+    pub unsafe fn max(a: Wide, b: Wide) -> Wide {
+        Wide(vmaxq_s16(a.0, b.0), vmaxq_s16(a.1, b.1))
+    }
+
+    #[inline(always)]
+    pub unsafe fn shifted(v: Wide) -> Wide {
+        Wide(
+            vextq_s16::<7>(vdupq_n_s16(i16::MIN), v.0),
+            vextq_s16::<7>(v.0, v.1),
+        )
+    }
+
+    #[inline(always)]
+    pub unsafe fn hmax(v: Wide) -> i16 {
+        vmaxvq_s16(vmaxq_s16(v.0, v.1))
+    }
+
+    #[inline(always)]
+    pub unsafe fn any_gt(a: Wide, b: Wide) -> bool {
+        vmaxvq_u16(vorrq_u16(vcgtq_s16(a.0, b.0), vcgtq_s16(a.1, b.1))) != 0
+    }
+}
+
+pub use wide::Wide;
+use wide::{adds, any_gt, hmax, max, shifted, splat};
+
 // A 16-lane restriping of the 8-lane word scores. Viterbi takes maxima of saturating sums cell by
 // cell, so every cell and the final score are the same whatever the lane count.
 #[derive(Debug)]
 pub struct VitProfile {
     q: usize,
-    rwv: Vec<__m256i>,
-    twv: Vec<__m256i>,
+    rwv: Vec<Wide>,
+    twv: Vec<Wide>,
 }
 
 impl VitProfile {
     pub fn new(om: &OProfile) -> Option<Arc<Self>> {
-        if !is_x86_feature_detected!("avx2") {
+        if !wide::available() {
             return None;
         }
         let m = om.m;
@@ -31,7 +132,7 @@ impl VitProfile {
             false => i16::MIN,
         };
         let vector = |lane: &dyn Fn(usize) -> i16| unsafe {
-            std::mem::transmute::<[i16; LANES], __m256i>(std::array::from_fn(lane))
+            std::mem::transmute::<[i16; LANES], Wide>(std::array::from_fn(lane))
         };
         let mut rwv = Vec::with_capacity(om.abc_kp * q);
         for row in om.rwv.iter() {
@@ -72,36 +173,21 @@ fn transition(
     }
 }
 
-#[target_feature(enable = "avx2")]
-unsafe fn shifted(v: __m256i) -> __m256i {
-    let low = _mm256_permute2x128_si256::<0x08>(v, v);
-    _mm256_insert_epi16::<0>(_mm256_alignr_epi8::<14>(v, low), i16::MIN)
-}
-
-#[target_feature(enable = "avx2")]
-unsafe fn hmax(v: __m256i) -> i16 {
-    let mut m = _mm_max_epi16(_mm256_castsi256_si128(v), _mm256_extracti128_si256::<1>(v));
-    m = _mm_max_epi16(m, _mm_srli_si128::<8>(m));
-    m = _mm_max_epi16(m, _mm_srli_si128::<4>(m));
-    m = _mm_max_epi16(m, _mm_srli_si128::<2>(m));
-    _mm_extract_epi16::<0>(m) as i16
-}
-
 fn add(a: i16, b: i16) -> i16 {
     (a as i32 + b as i32) as i16
 }
 
-#[target_feature(enable = "avx2")]
+#[cfg_attr(target_arch = "x86_64", target_feature(enable = "avx2"))]
 pub unsafe fn viterbi_filter(
     dsq: &[Dsq],
     l: usize,
     om: &OProfile,
     vp: &VitProfile,
-    dp: &mut Vec<__m256i>,
+    dp: &mut Vec<Wide>,
 ) -> VitResult {
     assert!(dsq.len() > l);
     let q_count = vp.q;
-    let neg = _mm256_set1_epi16(i16::MIN);
+    let neg = splat(i16::MIN);
     dp.clear();
     dp.resize(3 * q_count, neg);
     let cells = dp.as_mut_ptr();
@@ -123,29 +209,26 @@ pub unsafe fn viterbi_filter(
         let mut dcv = neg;
         let mut xev = neg;
         let mut dmaxv = neg;
-        let xbv = _mm256_set1_epi16(xb);
+        let xbv = splat(xb);
         let mut mpv = shifted(*mmx.add(3 * (q_count - 1)));
         let mut dpv = shifted(*dmx.add(3 * (q_count - 1)));
         let mut ipv = shifted(*imx.add(3 * (q_count - 1)));
         for q in 0..q_count {
             let t = twv.add(7 * q);
-            let mut sv = _mm256_adds_epi16(xbv, *t);
-            sv = _mm256_max_epi16(sv, _mm256_adds_epi16(mpv, *t.add(1)));
-            sv = _mm256_max_epi16(sv, _mm256_adds_epi16(ipv, *t.add(2)));
-            sv = _mm256_max_epi16(sv, _mm256_adds_epi16(dpv, *t.add(3)));
-            sv = _mm256_adds_epi16(sv, *rsc.add(q));
-            xev = _mm256_max_epi16(xev, sv);
+            let mut sv = adds(xbv, *t);
+            sv = max(sv, adds(mpv, *t.add(1)));
+            sv = max(sv, adds(ipv, *t.add(2)));
+            sv = max(sv, adds(dpv, *t.add(3)));
+            sv = adds(sv, *rsc.add(q));
+            xev = max(xev, sv);
             mpv = *mmx.add(3 * q);
             dpv = *dmx.add(3 * q);
             ipv = *imx.add(3 * q);
             *mmx.add(3 * q) = sv;
             *dmx.add(3 * q) = dcv;
-            dcv = _mm256_adds_epi16(sv, *t.add(4));
-            dmaxv = _mm256_max_epi16(dcv, dmaxv);
-            *imx.add(3 * q) = _mm256_max_epi16(
-                _mm256_adds_epi16(mpv, *t.add(5)),
-                _mm256_adds_epi16(ipv, *t.add(6)),
-            );
+            dcv = adds(sv, *t.add(4));
+            dmaxv = max(dcv, dmaxv);
+            *imx.add(3 * q) = max(adds(mpv, *t.add(5)), adds(ipv, *t.add(6)));
         }
 
         let xe = hmax(xev);
@@ -161,18 +244,18 @@ pub unsafe fn viterbi_filter(
             dcv = shifted(dcv);
             for q in 0..q_count {
                 let d = dmx.add(3 * q);
-                *d = _mm256_max_epi16(dcv, *d);
-                dcv = _mm256_adds_epi16(*d, *dd.add(q));
+                *d = max(dcv, *d);
+                dcv = adds(*d, *dd.add(q));
             }
             'passes: loop {
                 dcv = shifted(dcv);
                 for q in 0..q_count {
                     let d = dmx.add(3 * q);
-                    if _mm256_movemask_epi8(_mm256_cmpgt_epi16(dcv, *d)) == 0 {
+                    if !any_gt(dcv, *d) {
                         break 'passes;
                     }
-                    *d = _mm256_max_epi16(dcv, *d);
-                    dcv = _mm256_adds_epi16(*d, *dd.add(q));
+                    *d = max(dcv, *d);
+                    dcv = adds(*d, *dd.add(q));
                 }
             }
         } else {
@@ -189,5 +272,5 @@ pub unsafe fn viterbi_filter(
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/simd/vit_avx2_test.rs"]
+#[path = "../../tests/unit/simd/vit_wide_test.rs"]
 mod tests;

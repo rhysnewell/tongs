@@ -79,8 +79,7 @@ pub struct OProfile {
     /// SSV signed-byte match scores, with extra wrapped vectors for band code.
     pub sbv: Arc<Vec<Vec<[u8; 16]>>>,
     pub ssv: Option<Arc<crate::simd::ssv::SsvProfile>>,
-    #[cfg(target_arch = "x86_64")]
-    pub vit: Option<Arc<crate::simd::vit_avx2::VitProfile>>,
+    pub vit: Option<Arc<crate::simd::vit_wide::VitProfile>>,
     pub tbm_b: u8,
     pub tec_b: u8,
     pub tjb_b: u8,
@@ -155,7 +154,6 @@ impl OProfile {
             rbv: Arc::new(mf.rbv),
             sbv: Arc::new(mf.sbv),
             ssv,
-            #[cfg(target_arch = "x86_64")]
             vit: None,
             tbm_b: mf.tbm_b,
             tec_b: mf.tec_b,
@@ -188,12 +186,10 @@ impl OProfile {
             abc_kp: kp,
         };
 
-        #[cfg(target_arch = "x86_64")]
-        let om = OProfile {
-            vit: crate::simd::vit_avx2::VitProfile::new(&om),
+        OProfile {
+            vit: crate::simd::vit_wide::VitProfile::new(&om),
             ..om
-        };
-        om
+        }
     }
 
     pub fn reconfig_msv_length(&mut self, l: i32) {

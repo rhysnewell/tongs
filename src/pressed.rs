@@ -1288,7 +1288,6 @@ pub fn oprofile_from_pressed_records(
         rbv: std::sync::Arc::new(rbv),
         sbv: std::sync::Arc::new(sbv),
         ssv,
-        #[cfg(target_arch = "x86_64")]
         vit: None,
         tbm_b: msv.tbm_b,
         tec_b: msv.tec_b,
@@ -1320,9 +1319,8 @@ pub fn oprofile_from_pressed_records(
         abc_k,
         abc_kp,
     };
-    #[cfg(target_arch = "x86_64")]
     let om = OProfile {
-        vit: crate::simd::vit_avx2::VitProfile::new(&om),
+        vit: crate::simd::vit_wide::VitProfile::new(&om),
         ..om
     };
     Ok(om)

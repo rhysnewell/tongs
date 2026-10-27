@@ -80,10 +80,8 @@ pub struct Pipeline {
     pub evparam: [f32; 6],
 
     msv_dp: Vec<crate::simd::sse::__m128i>,
-    #[cfg(target_arch = "x86_64")]
-    vit_dp: Vec<std::arch::x86_64::__m256i>,
-    #[cfg(not(target_arch = "x86_64"))]
-    vit_dp: Vec<crate::simd::sse::__m128i>,
+    vit_dp: Vec<crate::simd::vit_wide::Wide>,
+    narrow_vit_dp: Vec<crate::simd::sse::__m128i>,
     fwd_pmx: crate::simd::probmx::ProbMx,
     bck_pmx: crate::simd::probmx::ProbMx,
     domains: crate::domaindef::Scratch,
@@ -131,6 +129,7 @@ impl Pipeline {
             evparam: [0.0; 6],
             msv_dp: Vec::new(),
             vit_dp: Vec::new(),
+            narrow_vit_dp: Vec::new(),
             fwd_pmx: Default::default(),
             bck_pmx: Default::default(),
             domains: Default::default(),
@@ -153,6 +152,7 @@ impl Pipeline {
             n_targets: 0,
             msv_dp: Vec::new(),
             vit_dp: Vec::new(),
+            narrow_vit_dp: Vec::new(),
             fwd_pmx: Default::default(),
             bck_pmx: Default::default(),
             domains: Default::default(),

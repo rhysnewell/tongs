@@ -3,8 +3,6 @@ use crate::profile::*;
 use crate::sequence::Sequence;
 use crate::simd::msv_filter::MsvResult;
 use crate::simd::oprofile::OProfile;
-#[cfg(target_arch = "x86_64")]
-use crate::simd::vit_filter::p7_viterbi_filter;
 use crate::simd::vit_filter::VitResult;
 use crate::stats;
 use crate::tophits::*;
@@ -118,10 +116,9 @@ impl Pipeline {
             if filter_p > self.f2 {
                 let vit_sc: f32;
                 {
-                    #[cfg(target_arch = "x86_64")]
                     let vit_result = match om.vit.as_ref() {
                         Some(vp) => unsafe {
-                            crate::simd::vit_avx2::viterbi_filter(
+                            crate::simd::vit_wide::viterbi_filter(
                                 &sq.dsq,
                                 l,
                                 om,
@@ -129,16 +126,14 @@ impl Pipeline {
                                 &mut self.vit_dp,
                             )
                         },
-                        None => unsafe { p7_viterbi_filter(&sq.dsq, l, om) },
-                    };
-                    #[cfg(not(target_arch = "x86_64"))]
-                    let vit_result = unsafe {
-                        crate::simd::vit_filter::p7_viterbi_filter_with_scratch(
-                            &sq.dsq,
-                            l,
-                            om,
-                            &mut self.vit_dp,
-                        )
+                        None => unsafe {
+                            crate::simd::vit_filter::p7_viterbi_filter_with_scratch(
+                                &sq.dsq,
+                                l,
+                                om,
+                                &mut self.narrow_vit_dp,
+                            )
+                        },
                     };
                     vit_sc = match vit_result {
                         VitResult::Ok(sc) => sc,

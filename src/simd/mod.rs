@@ -8,9 +8,8 @@ pub mod msv_filter;
 pub mod probmx;
 pub mod ssv;
 pub mod ssv_longtarget;
-#[cfg(target_arch = "x86_64")]
-pub mod vit_avx2;
 pub mod vit_filter;
+pub mod vit_wide;
 
 #[cfg(test)]
 #[path = "../../tests/unit/simd/fixtures.rs"]
