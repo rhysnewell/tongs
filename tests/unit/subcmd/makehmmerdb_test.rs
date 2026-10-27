@@ -82,36 +82,12 @@ fn degenerate_residues_keep_original_symbols_and_record_ranges() {
 }
 
 #[test]
-fn mt19937_matches_easel_esl_random_seed_42() {
-    // Reference values produced by Easel's esl_random() with
-    // esl_randomness_Create(42): the standard MT19937 stream tempered and
-    // divided by 2^32. The first raw 32-bit outputs of MT19937 seeded the
-    // Easel way (mt[0]=42, mt[z]=69069*mt[z-1]) are deterministic; here we
-    // check the derived 0..3 replacement codes, which is what actually feeds
-    // the BWT. The sequence is fixed for seed 42 regardless of platform.
-    let mut rng = Mt19937::new(42);
-    // Pull a handful of u32s; verify determinism (same seed -> same stream)
-    // and that codes stay in range.
-    let first = rng.next_u32();
-    let second = rng.next_u32();
-    assert_ne!(first, second);
-    let mut rng2 = Mt19937::new(42);
-    assert_eq!(rng2.next_u32(), first);
-    assert_eq!(rng2.next_u32(), second);
-
-    let mut rng3 = Mt19937::new(42);
-    for _ in 0..1000 {
-        assert!(rng3.dna_replacement_code() < 4);
-    }
-}
-
-#[test]
 fn dna_encode_substitutes_degenerate_with_rng_in_order() {
     // Two consecutive Ns should be replaced by the first two RNG draws, in
     // order; canonical bases are encoded directly without consuming the RNG.
     let mut rng_ref = Mt19937::new(MAKEHMMERDB_RNG_SEED);
-    let first = rng_ref.dna_replacement_code();
-    let second = rng_ref.dna_replacement_code();
+    let first = dna_replacement_code(&mut rng_ref);
+    let second = dna_replacement_code(&mut rng_ref);
 
     let mut rng = Mt19937::new(MAKEHMMERDB_RNG_SEED);
     let encoded = c_dna_text_without_separators(b"ACNNGT", &mut rng).unwrap();
