@@ -1,3 +1,18 @@
+# tongs
+
+A fast Rust HMMER 3.4, forked from [hmmer-pure-rs](https://github.com/henriksson-lab/hmmer-pure-rs) 0.8.0 (BSD-3-Clause). The goal is identical hits to C HMMER at lower wall time, for use as a library inside [rosella](https://github.com/rhysnewell/rosella).
+
+On 183 GTDB marker models against 321,472 metagenome proteins (`-T 10 --domT 10 -Z 1 --domZ 1 --cpu 8`, 4-core Haswell), tongs takes 88 s, C hmmsearch 3.4 141 s, and hmmer-pure-rs 0.8.0 375 s. The per-domain table matches C on every row but one inherited `acc` value.
+
+What changed from the fork point:
+
+* Targets are read once and every model scans whole blocks in parallel, instead of re-reading the file per model.
+* The SSV shortcut runs at every model length, on 32-lane AVX2 bands.
+* The Viterbi filter runs on 16-lane AVX2.
+* Profile tables are shared rather than copied, matrices are reused, and the posterior matrix is never stored: each row is decoded and used straight away.
+
+The text below is the upstream README.
+
 # hmmer-pure-rs 0.8.0
 
 A Rust port of [HMMER 3.4](http://hmmer.org/) for biological sequence analysis using profile hidden Markov models (profile HMMs). Searches sequence databases for homologous sequences.
