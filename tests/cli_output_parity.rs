@@ -17,7 +17,7 @@ fn hmmpgmd_test_guard() -> std::sync::MutexGuard<'static, ()> {
 }
 
 fn hmmer() -> &'static str {
-    env!("CARGO_BIN_EXE_hmmer")
+    env!("CARGO_BIN_EXE_tongs")
 }
 
 fn project_root() -> &'static str {

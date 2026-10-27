@@ -3,7 +3,7 @@ use std::process::Command;
 use std::process::Stdio;
 
 fn hmmer() -> &'static str {
-    env!("CARGO_BIN_EXE_hmmer")
+    env!("CARGO_BIN_EXE_tongs")
 }
 
 fn write_bad_sequence_pair(dir: &tempfile::TempDir) -> (std::path::PathBuf, std::path::PathBuf) {
