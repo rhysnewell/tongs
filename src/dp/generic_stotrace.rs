@@ -51,22 +51,23 @@ pub fn stochastic_trace_pmx_into(
     tr.append(State::T, k, i);
     tr.append(State::C, k, i);
     let mut s0 = State::C;
+    let sx = Striped::new(om, ox);
 
     while s0 != State::S {
         let s1 = match s0 {
             State::M => {
-                let next = select_m_pmx(rng, om, ox, i, k);
+                let next = select_m_pmx(rng, &sx, i, k);
                 k -= 1;
                 i -= 1;
                 next
             }
             State::D => {
-                let next = select_d_pmx(rng, om, ox, i, k);
+                let next = select_d_pmx(rng, &sx, i, k);
                 k -= 1;
                 next
             }
             State::I => {
-                let next = select_i_pmx(rng, om, ox, i, k);
+                let next = select_i_pmx(rng, &sx, i, k);
                 i -= 1;
                 next
             }
@@ -77,10 +78,10 @@ pub fn stochastic_trace_pmx_into(
                     State::N
                 }
             }
-            State::C => select_c_pmx(rng, om, ox, i),
-            State::J => select_j_pmx(rng, om, ox, i),
-            State::E => select_e_pmx(rng, om, ox, i, &mut k),
-            State::B => select_b_pmx(rng, om, ox, i),
+            State::C => select_c_pmx(rng, &sx, i),
+            State::J => select_j_pmx(rng, &sx, i),
+            State::E => select_e_pmx(rng, &sx, i, &mut k),
+            State::B => select_b_pmx(rng, &sx, i),
             _ => State::S,
         };
         tr.append(s1, k, i);
@@ -95,50 +96,70 @@ pub fn stochastic_trace_pmx_into(
     tr.i.reverse();
 }
 
-/// Striped lookup of a forward-style transition probability at model node `k`,
-/// transition kind `t`.
 #[cfg(target_arch = "x86_64")]
-fn tfv(om: &OProfile, k: usize, t: usize) -> f32 {
-    let q = (k - 1) % nqf(om.m);
-    let lane = (k - 1) / nqf(om.m);
-    om.tfv[7 * q + t][lane]
+struct Striped<'a> {
+    q: usize,
+    width: usize,
+    cells: &'a [f32],
+    xmx: &'a [f32],
+    row_scale: &'a [f32],
+    tfv: &'a [[f32; 4]],
+    xf: &'a [[f32; P7O_NXTRANS]; P7O_NXSTATES],
+    m: usize,
 }
 
-/// Striped lookup of the D->D transition probability at model node `k`.
 #[cfg(target_arch = "x86_64")]
-fn tfv_dd(om: &OProfile, k: usize) -> f32 {
-    let q = (k - 1) % nqf(om.m);
-    let lane = (k - 1) / nqf(om.m);
-    om.tfv[7 * nqf(om.m) + q][lane]
+impl<'a> Striped<'a> {
+    fn new(om: &'a OProfile, ox: &'a ProbMx) -> Self {
+        Striped {
+            q: ox.q_count(),
+            width: ox.striped_row_width(),
+            cells: &ox.striped_dp[ox.striped_dp_offset..],
+            xmx: &ox.xmx,
+            row_scale: &ox.row_scale,
+            tfv: &om.tfv,
+            xf: &om.xf,
+            m: om.m,
+        }
+    }
+
+    fn slot(&self, k: usize) -> (usize, usize) {
+        ((k - 1) % self.q, (k - 1) / self.q)
+    }
+
+    fn mdi(&self, i: usize, k: usize) -> (f32, f32, f32) {
+        let (stripe, lane) = self.slot(k);
+        let base = i * self.width + stripe * 12 + lane;
+        (self.cells[base], self.cells[base + 4], self.cells[base + 8])
+    }
+
+    fn t(&self, k: usize, t: usize) -> f32 {
+        let (stripe, lane) = self.slot(k);
+        self.tfv[7 * stripe + t][lane]
+    }
+
+    fn dd(&self, k: usize) -> f32 {
+        let (stripe, lane) = self.slot(k);
+        self.tfv[7 * self.q + stripe][lane]
+    }
+
+    fn x(&self, i: usize, s: usize) -> f32 {
+        self.xmx[i * 5 + s]
+    }
 }
 
-/// Sample predecessor of `M_k(i)` from {B, M, I, D} weighted by transition probs.
 #[cfg(target_arch = "x86_64")]
-fn select_m_pmx(
-    rng: &mut MersenneTwister,
-    om: &OProfile,
-    ox: &ProbMx,
-    i: usize,
-    k: usize,
-) -> State {
+fn select_m_pmx(rng: &mut MersenneTwister, sx: &Striped, i: usize, k: usize) -> State {
     let prev_k = k - 1;
-    let bm = ox.xmx(i - 1, PXB) * tfv(om, k, P7O_BM);
-    let mm = if prev_k > 0 {
-        ox.mmx(i - 1, prev_k)
-    } else {
-        0.0
-    } * tfv(om, k, P7O_MM);
-    let im = if prev_k > 0 {
-        ox.imx(i - 1, prev_k)
-    } else {
-        0.0
-    } * tfv(om, k, P7O_IM);
-    let dm = if prev_k > 0 {
-        ox.dmx(i - 1, prev_k)
-    } else {
-        0.0
-    } * tfv(om, k, P7O_DM);
-    match choose_probs(rng, &[bm, mm, im, dm]) {
+    let (m, d, ins) = match prev_k > 0 {
+        true => sx.mdi(i - 1, prev_k),
+        false => (0.0, 0.0, 0.0),
+    };
+    let bm = sx.x(i - 1, PXB) * sx.t(k, P7O_BM);
+    let mm = m * sx.t(k, P7O_MM);
+    let im = ins * sx.t(k, P7O_IM);
+    let dm = d * sx.t(k, P7O_DM);
+    match choose_probs(rng, [bm, mm, im, dm]) {
         0 => State::B,
         1 => State::M,
         2 => State::I,
@@ -146,132 +167,99 @@ fn select_m_pmx(
     }
 }
 
-/// Sample predecessor of `D_k(i)` from {M, D}.
 #[cfg(target_arch = "x86_64")]
-fn select_d_pmx(
-    rng: &mut MersenneTwister,
-    om: &OProfile,
-    ox: &ProbMx,
-    i: usize,
-    k: usize,
-) -> State {
+fn select_d_pmx(rng: &mut MersenneTwister, sx: &Striped, i: usize, k: usize) -> State {
     let prev_k = k - 1;
-    let md = ox.mmx(i, prev_k) * tfv(om, prev_k, P7O_MD);
-    let dd = ox.dmx(i, prev_k) * tfv_dd(om, prev_k);
-    if choose_probs(rng, &[md, dd]) == 0 {
-        State::M
-    } else {
-        State::D
+    let (m, d, _) = sx.mdi(i, prev_k);
+    let md = m * sx.t(prev_k, P7O_MD);
+    let dd = d * sx.dd(prev_k);
+    match choose_probs(rng, [md, dd]) {
+        0 => State::M,
+        _ => State::D,
     }
 }
 
-/// Sample predecessor of `I_k(i)` from {M, I}.
 #[cfg(target_arch = "x86_64")]
-fn select_i_pmx(
-    rng: &mut MersenneTwister,
-    om: &OProfile,
-    ox: &ProbMx,
-    i: usize,
-    k: usize,
-) -> State {
-    let mi = ox.mmx(i - 1, k) * tfv(om, k, P7O_MI);
-    let ii = ox.imx(i - 1, k) * tfv(om, k, P7O_II);
-    if choose_probs(rng, &[mi, ii]) == 0 {
-        State::M
-    } else {
-        State::I
+fn select_i_pmx(rng: &mut MersenneTwister, sx: &Striped, i: usize, k: usize) -> State {
+    let (m, _, ins) = sx.mdi(i - 1, k);
+    let mi = m * sx.t(k, P7O_MI);
+    let ii = ins * sx.t(k, P7O_II);
+    match choose_probs(rng, [mi, ii]) {
+        0 => State::M,
+        _ => State::I,
     }
 }
 
-/// Sample C-state predecessor (C loop vs E move) from probability-space matrix.
 #[cfg(target_arch = "x86_64")]
-fn select_c_pmx(rng: &mut MersenneTwister, om: &OProfile, ox: &ProbMx, i: usize) -> State {
-    let c = ox.xmx(i - 1, PXC) * om.xf[P7O_C][P7O_LOOP];
-    let e = ox.xmx(i, PXE) * om.xf[P7O_E][P7O_MOVE] * ox.row_scale[i];
-    if choose_probs(rng, &[c, e]) == 0 {
-        State::C
-    } else {
-        State::E
+fn select_c_pmx(rng: &mut MersenneTwister, sx: &Striped, i: usize) -> State {
+    let c = sx.x(i - 1, PXC) * sx.xf[P7O_C][P7O_LOOP];
+    let e = sx.x(i, PXE) * sx.xf[P7O_E][P7O_MOVE] * sx.row_scale[i];
+    match choose_probs(rng, [c, e]) {
+        0 => State::C,
+        _ => State::E,
     }
 }
 
-/// Sample J-state predecessor (J loop vs E loop) from probability-space matrix.
 #[cfg(target_arch = "x86_64")]
-fn select_j_pmx(rng: &mut MersenneTwister, om: &OProfile, ox: &ProbMx, i: usize) -> State {
-    let j = ox.xmx(i - 1, PXJ) * om.xf[P7O_J][P7O_LOOP];
-    let e = ox.xmx(i, PXE) * om.xf[P7O_E][P7O_LOOP] * ox.row_scale[i];
-    if choose_probs(rng, &[j, e]) == 0 {
-        State::J
-    } else {
-        State::E
+fn select_j_pmx(rng: &mut MersenneTwister, sx: &Striped, i: usize) -> State {
+    let j = sx.x(i - 1, PXJ) * sx.xf[P7O_J][P7O_LOOP];
+    let e = sx.x(i, PXE) * sx.xf[P7O_E][P7O_LOOP] * sx.row_scale[i];
+    match choose_probs(rng, [j, e]) {
+        0 => State::J,
+        _ => State::E,
     }
 }
 
-/// Sample B-state predecessor (N move vs J move) from probability-space matrix.
 #[cfg(target_arch = "x86_64")]
-fn select_b_pmx(rng: &mut MersenneTwister, om: &OProfile, ox: &ProbMx, i: usize) -> State {
-    let n = ox.xmx(i, PXN) * om.xf[P7O_N][P7O_MOVE];
-    let j = ox.xmx(i, PXJ) * om.xf[P7O_J][P7O_MOVE];
-    if choose_probs(rng, &[n, j]) == 0 {
-        State::N
-    } else {
-        State::J
+fn select_b_pmx(rng: &mut MersenneTwister, sx: &Striped, i: usize) -> State {
+    let n = sx.x(i, PXN) * sx.xf[P7O_N][P7O_MOVE];
+    let j = sx.x(i, PXJ) * sx.xf[P7O_J][P7O_MOVE];
+    match choose_probs(rng, [n, j]) {
+        0 => State::N,
+        _ => State::J,
     }
 }
 
-/// Sample E-state predecessor: pick a model node `k` and state `M`/`D` whose
-/// striped probability mass is proportional to the cell value. Writes chosen
-/// `k` into `ret_k`.
 #[cfg(target_arch = "x86_64")]
-fn select_e_pmx(
-    rng: &mut MersenneTwister,
-    om: &OProfile,
-    ox: &ProbMx,
-    i: usize,
-    ret_k: &mut usize,
-) -> State {
-    let q = nqf(om.m);
+fn select_e_pmx(rng: &mut MersenneTwister, sx: &Striped, i: usize, ret_k: &mut usize) -> State {
     let roll = rng.next_f64();
-    let norm = (1.0 / ox.xmx(i, PXE) as f64) as f32;
+    let norm = (1.0 / sx.x(i, PXE) as f64) as f32;
+    let row = &sx.cells[i * sx.width..];
     let mut sum = 0.0_f64;
-    for qi in 0..q {
+    for stripe in 0..sx.q {
+        let cell = &row[stripe * 12..stripe * 12 + 8];
         for lane in 0..4 {
-            let k = lane * q + qi + 1;
-            sum += (ox.mmx(i, k) * norm) as f64;
+            sum += (cell[lane] * norm) as f64;
             if roll < sum {
-                *ret_k = k;
+                *ret_k = lane * sx.q + stripe + 1;
                 return State::M;
             }
         }
         for lane in 0..4 {
-            let k = lane * q + qi + 1;
-            sum += (ox.dmx(i, k) * norm) as f64;
+            sum += (cell[4 + lane] * norm) as f64;
             if roll < sum {
-                *ret_k = k;
+                *ret_k = lane * sx.q + stripe + 1;
                 return State::D;
             }
         }
     }
-    *ret_k = om.m;
+    *ret_k = sx.m;
     State::M
 }
 
-/// Sample an index from a (non-normalized) probability vector. Probabilities
-/// are first normalized in-place (Kahan-summed); ties yield the first index.
 #[cfg(target_arch = "x86_64")]
-fn choose_probs(rng: &mut MersenneTwister, probs: &[f32]) -> usize {
-    let mut normed = probs.to_vec();
-    f_norm(&mut normed);
+fn choose_probs<const N: usize>(rng: &mut MersenneTwister, mut probs: [f32; N]) -> usize {
+    f_norm(&mut probs);
     let roll = rng.next_f64();
+    let total: f64 = probs.iter().map(|&p| p as f64).sum();
     let mut cumsum = 0.0_f64;
-    let total: f64 = normed.iter().map(|&p| p as f64).sum();
-    for (idx, &p) in normed.iter().enumerate() {
+    for (idx, &p) in probs.iter().enumerate() {
         cumsum += p as f64;
         if roll < cumsum / total {
             return idx;
         }
     }
-    probs.len() - 1
+    N - 1
 }
 
 /// Normalize a slice to sum to 1.0 using Kahan summation; if the sum is zero,
