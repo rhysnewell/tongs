@@ -4,6 +4,7 @@
 use crate::alphabet::{Alphabet, Dsq};
 use crate::dp::gmx::*;
 use crate::profile::*;
+use crate::tophits::AliDisplay;
 
 /// State types in a trace.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -455,7 +456,7 @@ pub fn alignment_display(
     dsq: &[Dsq],
     hmm: &crate::hmm::Hmm,
     abc: &Alphabet,
-) -> Option<AlignmentDisplay> {
+) -> Option<AliDisplay> {
     alignment_display_with_pp(tr, dsq, hmm, abc, None)
 }
 
@@ -467,7 +468,7 @@ pub fn alignment_display_with_pp(
     hmm: &crate::hmm::Hmm,
     abc: &Alphabet,
     pp: Option<&crate::dp::gmx::Gmx>,
-) -> Option<AlignmentDisplay> {
+) -> Option<AliDisplay> {
     alignment_display_with_pp_bg(tr, dsq, hmm, abc, pp, None)
 }
 
@@ -483,7 +484,7 @@ pub fn alignment_display_with_pp_bg(
     abc: &Alphabet,
     pp: Option<&crate::dp::gmx::Gmx>,
     bg_override: Option<&[f32]>,
-) -> Option<AlignmentDisplay> {
+) -> Option<AliDisplay> {
     alignment_display_with_pp_emission_odds(tr, dsq, hmm, abc, pp, bg_override, None)
 }
 
@@ -497,7 +498,7 @@ pub fn alignment_display_with_pp_emission_odds(
     pp: Option<&crate::dp::gmx::Gmx>,
     bg_override: Option<&[f32]>,
     emission_odds: Option<&dyn Fn(usize, usize) -> Option<f32>>,
-) -> Option<AlignmentDisplay> {
+) -> Option<AliDisplay> {
     // C anchors the display window on M states ONLY (p7_alidisplay.c:108-119):
     // z1 = first p7T_M state, z2 = last p7T_M state. Interior D/I between them
     // are still emitted, but leading/trailing D and I (e.g. a `...M D D E`
@@ -665,7 +666,7 @@ pub fn alignment_display_with_pp_emission_odds(
         }
     }
 
-    Some(AlignmentDisplay {
+    Some(AliDisplay {
         model,
         mline,
         aseq,
@@ -732,19 +733,6 @@ pub fn alignment_coords(tr: &Trace) -> Option<(usize, usize, usize, usize)> {
     }
 
     Some((hmmfrom, hmmto, sqfrom, sqto))
-}
-
-/// Alignment display data for one domain.
-pub struct AlignmentDisplay {
-    pub model: String,
-    pub mline: String,
-    pub ppline: String,
-    pub aseq: String,
-    pub rfline: String,
-    pub hmmfrom: usize,
-    pub hmmto: usize,
-    pub sqfrom: usize,
-    pub sqto: usize,
 }
 
 #[cfg(test)]
