@@ -3,12 +3,6 @@ pub mod oprofile;
 pub mod optacc;
 
 #[cfg(target_arch = "x86_64")]
-pub mod avx2_fwd;
-#[cfg(target_arch = "x86_64")]
-pub mod avx2_msv;
-#[cfg(target_arch = "x86_64")]
-pub mod avx2_vit;
-#[cfg(target_arch = "x86_64")]
 pub mod bck_filter;
 pub mod fm_ssv;
 #[cfg(target_arch = "x86_64")]
@@ -20,7 +14,13 @@ pub mod probmx;
 pub mod ssv;
 pub mod ssv_longtarget;
 #[cfg(target_arch = "x86_64")]
+pub mod vit_avx2;
+#[cfg(target_arch = "x86_64")]
 pub mod vit_filter;
+
+#[cfg(test)]
+#[path = "../../tests/unit/simd/fixtures.rs"]
+pub(crate) mod fixtures;
 
 pub mod neon_fwd;
 pub mod neon_msv;

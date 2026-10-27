@@ -80,6 +80,8 @@ pub struct OProfile {
     /// SSV signed-byte match scores, with extra wrapped vectors for band code.
     pub sbv: Vec<Vec<[u8; 16]>>,
     pub ssv: Option<std::sync::Arc<crate::simd::ssv::SsvProfile>>,
+    #[cfg(target_arch = "x86_64")]
+    pub vit: Option<std::sync::Arc<crate::simd::vit_avx2::VitProfile>>,
     pub tbm_b: u8,
     pub tec_b: u8,
     pub tjb_b: u8,
@@ -169,10 +171,12 @@ impl OProfile {
             .collect();
 
         let ssv = crate::simd::ssv::SsvProfile::new(&mf.sbv, m);
-        let om = OProfile {
+        let mut om = OProfile {
             rbv: mf.rbv,
             sbv: mf.sbv,
             ssv,
+            #[cfg(target_arch = "x86_64")]
+            vit: None,
             tbm_b: mf.tbm_b,
             tec_b: mf.tec_b,
             tjb_b: mf.tjb_b,
@@ -206,6 +210,10 @@ impl OProfile {
             abc_kp: kp,
         };
 
+        #[cfg(target_arch = "x86_64")]
+        {
+            om.vit = crate::simd::vit_avx2::VitProfile::new(&om);
+        }
         om
     }
 

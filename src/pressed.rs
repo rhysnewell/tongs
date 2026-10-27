@@ -1287,10 +1287,12 @@ pub fn oprofile_from_pressed_records(
     let tfv_a: Vec<AlignedF32x4> = tfv.iter().copied().map(AlignedF32x4::from_array).collect();
 
     let ssv = crate::simd::ssv::SsvProfile::new(&sbv, msv.m);
-    Ok(OProfile {
+    let mut om = OProfile {
         rbv,
         sbv,
         ssv,
+        #[cfg(target_arch = "x86_64")]
+        vit: None,
         tbm_b: msv.tbm_b,
         tec_b: msv.tec_b,
         tjb_b: msv.tjb_b,
@@ -1322,7 +1324,12 @@ pub fn oprofile_from_pressed_records(
         name: msv.name.clone(),
         abc_k,
         abc_kp,
-    })
+    };
+    #[cfg(target_arch = "x86_64")]
+    {
+        om.vit = crate::simd::vit_avx2::VitProfile::new(&om);
+    }
+    Ok(om)
 }
 
 #[cfg(test)]

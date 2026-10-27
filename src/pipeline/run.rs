@@ -107,7 +107,18 @@ impl Pipeline {
                 #[cfg(target_arch = "x86_64")]
                 {
                     if is_x86_feature_detected!("sse2") {
-                        let vit_result = unsafe { p7_viterbi_filter(&sq.dsq, l, om) };
+                        let vit_result = match om.vit.as_ref() {
+                            Some(vp) => unsafe {
+                                crate::simd::vit_avx2::viterbi_filter(
+                                    &sq.dsq,
+                                    l,
+                                    om,
+                                    vp,
+                                    &mut self.vit_dp,
+                                )
+                            },
+                            None => unsafe { p7_viterbi_filter(&sq.dsq, l, om) },
+                        };
                         vit_sc = match vit_result {
                             VitResult::Ok(sc) => sc,
                             VitResult::Overflow => f32::INFINITY,
