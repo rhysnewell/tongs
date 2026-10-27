@@ -11,9 +11,12 @@ pub enum SsvResult {
     NoResult,
 }
 
-// Knudsen's band layout from HMMER's SSV filter. Fourteen bands leave two of the sixteen vector
-// registers for the running maximum and the begin vector.
+// Knudsen's band layout from HMMER's SSV filter. Fourteen bands leave two of x86's sixteen vector
+// registers for the running maximum and the begin vector. NEON has thirty-two.
+#[cfg(target_arch = "x86_64")]
 const BANDS: usize = 14;
+#[cfg(target_arch = "aarch64")]
+const BANDS: usize = 24;
 
 #[repr(C, align(32))]
 #[derive(Clone, Copy, Debug)]
@@ -256,6 +259,7 @@ ssv_bands!(
     (avx2_band14, 14, [0 1 2 3 4 5 6 7 8 9 10 11 12 13], [13 12 11 10 9 8 7 6 5 4 3 2 1 0]),
 );
 
+#[cfg(target_arch = "x86_64")]
 ssv_bands!(
     "sse2", __m128i, _mm_set1_epi8, sse2_wrap, sse2_hmax, sse2_xe,
     (_mm_subs_epi8, _mm_max_epu8, _mm_load_si128),
@@ -273,6 +277,36 @@ ssv_bands!(
     (sse2_band12, 12, [0 1 2 3 4 5 6 7 8 9 10 11], [11 10 9 8 7 6 5 4 3 2 1 0]),
     (sse2_band13, 13, [0 1 2 3 4 5 6 7 8 9 10 11 12], [12 11 10 9 8 7 6 5 4 3 2 1 0]),
     (sse2_band14, 14, [0 1 2 3 4 5 6 7 8 9 10 11 12 13], [13 12 11 10 9 8 7 6 5 4 3 2 1 0]),
+);
+
+#[cfg(target_arch = "aarch64")]
+ssv_bands!(
+    "sse2", __m128i, _mm_set1_epi8, sse2_wrap, sse2_hmax, sse2_xe,
+    (_mm_subs_epi8, _mm_max_epu8, _mm_load_si128),
+    (sse2_band1, 1, [0], [0]),
+    (sse2_band2, 2, [0 1], [1 0]),
+    (sse2_band3, 3, [0 1 2], [2 1 0]),
+    (sse2_band4, 4, [0 1 2 3], [3 2 1 0]),
+    (sse2_band5, 5, [0 1 2 3 4], [4 3 2 1 0]),
+    (sse2_band6, 6, [0 1 2 3 4 5], [5 4 3 2 1 0]),
+    (sse2_band7, 7, [0 1 2 3 4 5 6], [6 5 4 3 2 1 0]),
+    (sse2_band8, 8, [0 1 2 3 4 5 6 7], [7 6 5 4 3 2 1 0]),
+    (sse2_band9, 9, [0 1 2 3 4 5 6 7 8], [8 7 6 5 4 3 2 1 0]),
+    (sse2_band10, 10, [0 1 2 3 4 5 6 7 8 9], [9 8 7 6 5 4 3 2 1 0]),
+    (sse2_band11, 11, [0 1 2 3 4 5 6 7 8 9 10], [10 9 8 7 6 5 4 3 2 1 0]),
+    (sse2_band12, 12, [0 1 2 3 4 5 6 7 8 9 10 11], [11 10 9 8 7 6 5 4 3 2 1 0]),
+    (sse2_band13, 13, [0 1 2 3 4 5 6 7 8 9 10 11 12], [12 11 10 9 8 7 6 5 4 3 2 1 0]),
+    (sse2_band14, 14, [0 1 2 3 4 5 6 7 8 9 10 11 12 13], [13 12 11 10 9 8 7 6 5 4 3 2 1 0]),
+    (sse2_band15, 15, [0 1 2 3 4 5 6 7 8 9 10 11 12 13 14], [14 13 12 11 10 9 8 7 6 5 4 3 2 1 0]),
+    (sse2_band16, 16, [0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15], [15 14 13 12 11 10 9 8 7 6 5 4 3 2 1 0]),
+    (sse2_band17, 17, [0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16], [16 15 14 13 12 11 10 9 8 7 6 5 4 3 2 1 0]),
+    (sse2_band18, 18, [0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17], [17 16 15 14 13 12 11 10 9 8 7 6 5 4 3 2 1 0]),
+    (sse2_band19, 19, [0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18], [18 17 16 15 14 13 12 11 10 9 8 7 6 5 4 3 2 1 0]),
+    (sse2_band20, 20, [0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19], [19 18 17 16 15 14 13 12 11 10 9 8 7 6 5 4 3 2 1 0]),
+    (sse2_band21, 21, [0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20], [20 19 18 17 16 15 14 13 12 11 10 9 8 7 6 5 4 3 2 1 0]),
+    (sse2_band22, 22, [0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21], [21 20 19 18 17 16 15 14 13 12 11 10 9 8 7 6 5 4 3 2 1 0]),
+    (sse2_band23, 23, [0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22], [22 21 20 19 18 17 16 15 14 13 12 11 10 9 8 7 6 5 4 3 2 1 0]),
+    (sse2_band24, 24, [0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23], [23 22 21 20 19 18 17 16 15 14 13 12 11 10 9 8 7 6 5 4 3 2 1 0]),
 );
 
 #[cfg(test)]
