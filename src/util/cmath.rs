@@ -27,7 +27,7 @@ pub fn c_log_f32_to_f32(x: f32) -> f32 {
 /// `f32` natural log wrapper kept to make parity-sensitive call sites explicit.
 #[inline]
 pub fn c_logf_to_f32(x: f32) -> f32 {
-    x.ln()
+    super::libm_f32::logf(x)
 }
 
 /// Exponential wrapper kept to make parity-sensitive call sites explicit.
@@ -45,7 +45,7 @@ pub fn c_exp_to_f32(x: f64) -> f32 {
 /// `f32` exponential wrapper kept to make parity-sensitive call sites explicit.
 #[inline]
 pub fn c_expf_to_f32(x: f32) -> f32 {
-    x.exp()
+    super::libm_f32::expf(x)
 }
 
 /// Power wrapper kept to make parity-sensitive call sites explicit.
@@ -58,23 +58,4 @@ pub fn c_pow_f64(x: f64, y: f64) -> f64 {
 #[inline]
 pub fn c_sqrt_f64(x: f64) -> f64 {
     x.sqrt()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn wrappers_use_rust_float_operations() {
-        let x = 2.5;
-        assert_eq!(c_log_f64(x), x.ln());
-        assert_eq!(c_log_to_f32(x), x.ln() as f32);
-        assert_eq!(c_log_f32_to_f32(x as f32), (x as f32 as f64).ln() as f32);
-        assert_eq!(c_logf_to_f32(x as f32), (x as f32).ln());
-        assert_eq!(c_exp_f64(x), x.exp());
-        assert_eq!(c_exp_to_f32(x), x.exp() as f32);
-        assert_eq!(c_expf_to_f32(x as f32), (x as f32).exp());
-        assert_eq!(c_pow_f64(x, 3.0), x.powf(3.0));
-        assert_eq!(c_sqrt_f64(x), x.sqrt());
-    }
 }

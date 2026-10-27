@@ -1,5 +1,6 @@
 #[doc(hidden)]
 pub mod cmath;
+pub mod libm_f32;
 pub mod random;
 pub mod rootfinder;
 pub mod scorematrix;

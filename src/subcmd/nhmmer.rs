@@ -30,6 +30,7 @@ use tongs::pipeline::Pipeline;
 use tongs::prior::PriorStrategy;
 use tongs::profile::{self, Profile, P7_LOCAL};
 use tongs::sequence::{self, Sequence};
+use tongs::util::cmath::c_logf_to_f32;
 use tongs::simd::oprofile::OProfile;
 use tongs::tophits::TopHits;
 use tongs::util::cmath::{c_exp_f64, c_log_f64};
@@ -4708,10 +4709,10 @@ fn fm_ssv_collect_block_windows(
 
     let sc_thresh_bits = {
         let ml = max_length.max(1) as f32;
-        let tloop_total = (ml / (ml + 3.0)).ln() * ml;
-        let tmove = (3.0 / (ml + 3.0)).ln();
-        let tbmk = (2.0 / (m as f32 * (m as f32 + 1.0))).ln();
-        let tec = (1.0f32 / 2.0).ln();
+        let tloop_total = c_logf_to_f32(ml / (ml + 3.0)) * ml;
+        let tmove = c_logf_to_f32(3.0 / (ml + 3.0));
+        let tbmk = c_logf_to_f32(2.0 / (m as f32 * (m as f32 + 1.0)));
+        let tec = c_logf_to_f32(1.0f32 / 2.0);
         let mut bg_ml = bg.clone();
         bg_ml.set_length(ml as usize);
         let nullsc = bg_ml.null_one(ml as usize);
@@ -4858,10 +4859,10 @@ fn fm_ssv_augment_windows(
     // against `fm_extend_seed_diagonal`'s bit score, so convert to bits.
     let sc_thresh_bits = {
         let ml = max_length.max(1) as f32;
-        let tloop_total = (ml / (ml + 3.0)).ln() * ml;
-        let tmove = (3.0 / (ml + 3.0)).ln();
-        let tbmk = (2.0 / (m as f32 * (m as f32 + 1.0))).ln();
-        let tec = (1.0f32 / 2.0).ln(); // nu = 2.0
+        let tloop_total = c_logf_to_f32(ml / (ml + 3.0)) * ml;
+        let tmove = c_logf_to_f32(3.0 / (ml + 3.0));
+        let tbmk = c_logf_to_f32(2.0 / (m as f32 * (m as f32 + 1.0)));
+        let tec = c_logf_to_f32(1.0f32 / 2.0); // nu = 2.0
         let mut bg_ml = bg.clone();
         bg_ml.set_length(ml as usize);
         let nullsc = bg_ml.null_one(ml as usize);
