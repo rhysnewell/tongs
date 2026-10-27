@@ -544,7 +544,13 @@ fn align_traces_optimized(
 
         unsafe {
             tongs::simd::fwd_filter::forward_parser_pmx(&sq.dsq, sq.n, &om, &mut fwd);
-            tongs::simd::bck_filter::backward_parser_pmx(&sq.dsq, sq.n, &om, None, &mut bck);
+            tongs::simd::bck_filter::backward_parser_pmx(
+                &sq.dsq,
+                sq.n,
+                &om,
+                Some(&fwd.row_scale),
+                &mut bck,
+            );
             tongs::simd::optacc::decode_and_fill(
                 &fwd, &bck, &om, &mut pp, &mut oa, &mut cells, None,
             );
