@@ -29,7 +29,6 @@ impl<'a> Parse<'a> {
         dsq: &'a [Dsq],
         l: usize,
         xf: [[f32; P7O_NXTRANS]; P7O_NXSTATES],
-        om: &OProfile,
         pmx: &'a mut ProbMx,
         dp: &'a mut Vec<__m128>,
     ) -> Self {
@@ -42,9 +41,6 @@ impl<'a> Parse<'a> {
         pmx.set_xmx(0, PXC, 0.0);
         pmx.scale[0] = 0.0;
         pmx.row_scale[0] = 1.0;
-        let zerov = unsafe { _mm_setzero_ps() };
-        dp.clear();
-        dp.resize(nqf(om.m) * 3, zerov);
         Parse {
             dsq,
             l,
@@ -75,6 +71,10 @@ pub unsafe fn forward_parser_pair<'p>(
     a: &mut Parse<'p>,
     b: &mut Parse<'p>,
 ) -> (f32, f32) {
+    for lane in [&mut *a, &mut *b] {
+        lane.dp.clear();
+        lane.dp.resize(nqf(om.m) * 3, _mm_setzero_ps());
+    }
     let common = a.l.min(b.l);
     for i in 1..=common {
         row::<2>(om, [&mut *a, &mut *b], i);

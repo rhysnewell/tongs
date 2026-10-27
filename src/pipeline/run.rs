@@ -240,8 +240,8 @@ impl Pipeline {
         use crate::simd::fwd_pair::{forward_parser_pair, Parse};
         let (a, a_xf) = first;
         let (b, b_xf) = second;
-        let mut a = Parse::new(&a.dsq, a.n, a_xf, om, &mut self.fwd_pmx, &mut self.fwd_dp);
-        let mut b = Parse::new(&b.dsq, b.n, b_xf, om, &mut self.pair_pmx, &mut self.pair_dp);
+        let mut a = Parse::new(&a.dsq, a.n, a_xf, &mut self.fwd_pmx, &mut self.fwd_dp);
+        let mut b = Parse::new(&b.dsq, b.n, b_xf, &mut self.pair_pmx, &mut self.pair_dp);
         unsafe { forward_parser_pair(om, &mut a, &mut b) }
     }
 
