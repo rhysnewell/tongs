@@ -365,7 +365,7 @@ pub(super) fn c_dna_text_without_separators(
             b'C' | b'c' => 1,
             b'G' | b'g' => 2,
             b'T' | b't' | b'U' | b'u' => 3,
-            _ if is_dna_degenerate(base) => rng.dna_replacement_code(),
+            _ if is_dna_degenerate(base) => dna_replacement_code(rng),
             _ => {
                 return Err(invalid_data(format!(
                     "base '{}' cannot be encoded in C DNA FM stream",
