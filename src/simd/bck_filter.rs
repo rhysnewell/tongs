@@ -90,15 +90,31 @@ pub unsafe fn backward_pair<'p>(om: &OProfile, a: &mut Backward<'p>, b: &mut Bac
     last_row(om, a);
     last_row(om, b);
     let common = a.l.min(b.l);
-    for k in 1..common {
-        row::<2>(om, [&mut *a, &mut *b], k);
-    }
+    common_rows(om, a, b, common);
     let longer = if a.l > b.l { &mut *a } else { &mut *b };
     for k in common.max(1)..longer.l {
         row::<1>(om, [&mut *longer], k);
     }
     first_row(om, a);
     first_row(om, b);
+}
+
+#[cfg(target_arch = "x86_64")]
+mod avx;
+
+unsafe fn common_rows<'p>(
+    om: &OProfile,
+    a: &mut Backward<'p>,
+    b: &mut Backward<'p>,
+    common: usize,
+) {
+    #[cfg(target_arch = "x86_64")]
+    if is_x86_feature_detected!("avx2") {
+        return avx::rows(om, a, b, common);
+    }
+    for k in 1..common {
+        row::<2>(om, [&mut *a, &mut *b], k);
+    }
 }
 
 pub unsafe fn backward_parser_pmx(
@@ -257,11 +273,7 @@ unsafe fn row<const N: usize>(om: &OProfile, lanes: [&mut Backward; N], k: usize
     for t in 0..N {
         let lane = &mut *lanes[t];
         lane.x_b = hsum(x_bv[t]);
-        let xf = &lane.xf;
-        lane.x_c *= xf[P7O_C][P7O_LOOP];
-        lane.x_j = lane.x_b * xf[P7O_J][P7O_MOVE] + lane.x_j * xf[P7O_J][P7O_LOOP];
-        lane.x_n = lane.x_b * xf[P7O_N][P7O_MOVE] + lane.x_n * xf[P7O_N][P7O_LOOP];
-        lane.x_e = lane.x_c * xf[P7O_E][P7O_MOVE] + lane.x_j * xf[P7O_E][P7O_LOOP];
+        special_states(lane);
         x_ev[t] = _mm_set1_ps(lane.x_e);
     }
 
@@ -315,6 +327,27 @@ unsafe fn row<const N: usize>(om: &OProfile, lanes: [&mut Backward; N], k: usize
 
 #[inline(always)]
 unsafe fn rescale(lane: &mut Backward, dpc: *mut __m128, q: usize, i: usize) {
+    let (row_scale, scale) = advance(lane, i);
+    if let Some(scale) = scale {
+        let scalev = _mm_set1_ps(scale);
+        for cell in 0..q * 3 {
+            *dpc.add(cell) = _mm_mul_ps(*dpc.add(cell), scalev);
+        }
+    }
+    lane.store(i, row_scale);
+}
+
+#[inline(always)]
+fn special_states(lane: &mut Backward) {
+    let xf = &lane.xf;
+    lane.x_c *= xf[P7O_C][P7O_LOOP];
+    lane.x_j = lane.x_b * xf[P7O_J][P7O_MOVE] + lane.x_j * xf[P7O_J][P7O_LOOP];
+    lane.x_n = lane.x_b * xf[P7O_N][P7O_MOVE] + lane.x_n * xf[P7O_N][P7O_LOOP];
+    lane.x_e = lane.x_c * xf[P7O_E][P7O_MOVE] + lane.x_j * xf[P7O_E][P7O_LOOP];
+}
+
+#[inline(always)]
+unsafe fn advance(lane: &mut Backward, i: usize) -> (f32, Option<f32>) {
     if lane.x_b > 1.0e16 {
         lane.has_own_scales = true;
     }
@@ -328,14 +361,11 @@ unsafe fn rescale(lane: &mut Backward, dpc: *mut __m128, q: usize, i: usize) {
         *lane.fwd_row_scales.add(i)
     };
     if row_scale > 1.0 {
-        let scalev = _mm_set1_ps(1.0 / row_scale);
+        let scale = 1.0 / row_scale;
         lane.x_e /= row_scale;
         lane.x_n /= row_scale;
         lane.x_j /= row_scale;
         lane.x_c /= row_scale;
-        for cell in 0..q * 3 {
-            *dpc.add(cell) = _mm_mul_ps(*dpc.add(cell), scalev);
-        }
         if lane.tracks_scales() {
             lane.totscale += c_log_f64(row_scale as f64);
         }
@@ -344,8 +374,10 @@ unsafe fn rescale(lane: &mut Backward, dpc: *mut __m128, q: usize, i: usize) {
         } else {
             lane.x_b /= row_scale;
         }
+        (row_scale, Some(scale))
+    } else {
+        (row_scale, None)
     }
-    lane.store(i, row_scale);
 }
 
 unsafe fn first_row(om: &OProfile, lane: &mut Backward) -> f32 {

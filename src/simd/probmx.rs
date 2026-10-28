@@ -131,6 +131,12 @@ impl Rows {
     pub(crate) unsafe fn at(self, i: usize) -> *mut __m128 {
         self.base.add((i & self.mask) * self.stride)
     }
+
+    #[cfg(target_arch = "x86_64")]
+    #[inline(always)]
+    pub(crate) fn keeps_all(self) -> bool {
+        self.mask == usize::MAX
+    }
 }
 
 pub fn p_domain_decoding_reuse(

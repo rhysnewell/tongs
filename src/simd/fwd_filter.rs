@@ -98,14 +98,25 @@ pub unsafe fn forward_pair<'p>(
     a.start(q);
     b.start(q);
     let common = a.l.min(b.l);
-    for i in 1..=common {
-        row::<2>(om, [&mut *a, &mut *b], i);
-    }
+    common_rows(om, a, b, common);
     let longer = if a.l > b.l { &mut *a } else { &mut *b };
     for i in common + 1..=longer.l {
         row::<1>(om, [&mut *longer], i);
     }
     (a.score(), b.score())
+}
+
+#[cfg(target_arch = "x86_64")]
+mod avx;
+
+unsafe fn common_rows<'p>(om: &OProfile, a: &mut Forward<'p>, b: &mut Forward<'p>, common: usize) {
+    #[cfg(target_arch = "x86_64")]
+    if is_x86_feature_detected!("avx2") {
+        return avx::rows(om, a, b, common);
+    }
+    for i in 1..=common {
+        row::<2>(om, [&mut *a, &mut *b], i);
+    }
 }
 
 pub unsafe fn forward_parser(dsq: &[Dsq], l: usize, om: &OProfile) -> f32 {
@@ -258,29 +269,37 @@ unsafe fn row<const N: usize>(om: &OProfile, lanes: [&mut Forward; N], i: usize)
 
 #[inline(always)]
 unsafe fn specials(lane: &mut Forward, cur: *mut __m128, q_count: usize, i: usize) {
+    let (row_scale, scale) = advance(lane);
+    if let Some(scale) = scale {
+        let scalev = _mm_set1_ps(scale);
+        for cell in 0..q_count * 3 {
+            let p = cur.add(cell);
+            *p = _mm_mul_ps(*p, scalev);
+        }
+    }
+    lane.store(i, row_scale);
+}
+
+#[inline(always)]
+fn advance(lane: &mut Forward) -> (f32, Option<f32>) {
     let xf = &lane.xf;
     lane.xn *= xf[P7O_N][P7O_LOOP];
     lane.xc = lane.xc * xf[P7O_C][P7O_LOOP] + lane.xe * xf[P7O_E][P7O_MOVE];
     lane.xj = lane.xj * xf[P7O_J][P7O_LOOP] + lane.xe * xf[P7O_E][P7O_LOOP];
     lane.xb = lane.xj * xf[P7O_J][P7O_MOVE] + lane.xn * xf[P7O_N][P7O_MOVE];
-    let row_scale = if lane.xe > 1.0e4 {
+    if lane.xe > 1.0e4 {
         let row_scale = lane.xe;
-        let scalev = _mm_set1_ps(1.0 / lane.xe);
+        let scale = 1.0 / lane.xe;
         lane.xn /= row_scale;
         lane.xc /= row_scale;
         lane.xj /= row_scale;
         lane.xb /= row_scale;
-        for cell in 0..q_count * 3 {
-            let p = cur.add(cell);
-            *p = _mm_mul_ps(*p, scalev);
-        }
         lane.totscale = (lane.totscale as f64 + c_log_f64(lane.xe as f64)) as f32;
         lane.xe = 1.0;
-        row_scale
+        (row_scale, Some(scale))
     } else {
-        1.0
-    };
-    lane.store(i, row_scale);
+        (1.0, None)
+    }
 }
 
 #[inline(always)]
