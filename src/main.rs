@@ -39,7 +39,7 @@ fn main() -> ExitCode {
         "alimask" => subcmd::alimask::run(os_args_to_strings(sub_args_os)),
         "makehmmerdb" => subcmd::makehmmerdb::run(os_args_to_strings(sub_args_os)),
         #[cfg(unix)]
-        "pgmd" | "hmmpgmd" =>subcmd::hmmpgmd::run(os_args_to_strings(sub_args_os)),
+        "pgmd" | "hmmpgmd" => subcmd::hmmpgmd::run(os_args_to_strings(sub_args_os)),
         "sim" | "hmmsim" => subcmd::hmmsim::run(os_args_to_strings(sub_args_os)),
         "help" | "--help" | "-h" => {
             print_usage();
