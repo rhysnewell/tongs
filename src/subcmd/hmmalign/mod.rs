@@ -4,8 +4,13 @@ use std::path::PathBuf;
 
 use clap::{ArgAction, Parser};
 
+use tongs::align::Unalignable;
 use tongs::alphabet::Alphabet;
 use tongs::bg::Bg;
+use tongs::dp::generic_backward::g_backward;
+use tongs::dp::generic_decoding::g_decoding;
+use tongs::dp::generic_fwdback::g_forward;
+use tongs::dp::generic_optacc::{g_oa_trace, g_optimal_accuracy_with_deltas, OptAccTDelta};
 use tongs::dp::gmx::Gmx;
 use tongs::logsum;
 use tongs::msa;
@@ -15,6 +20,7 @@ use tongs::subcmd::inputs::read_hmms;
 use tongs::trace::State;
 use tongs::{
     simd::oprofile::{OProfile, P7O_C, P7O_J, P7O_LOOP, P7O_N},
+    simd::optacc::decoding_overflows,
     simd::probmx::{p_decoding_to_gmx, ProbMx},
 };
 
@@ -201,7 +207,11 @@ pub fn run(args: Vec<String>) -> std::process::ExitCode {
         build_text_msa_with_mapali(hmm, &abc, &bg, &sequences, mapped, args.trim)
     } else {
         build_text_msa(hmm, &abc, &bg, &sequences, args.trim)
-    };
+    }
+    .unwrap_or_else(|e| {
+        eprintln!("Error: {e}");
+        std::process::exit(1);
+    });
 
     let mut output_file = args.output.as_ref().map(|path| {
         File::create(path).unwrap_or_else(|e| {

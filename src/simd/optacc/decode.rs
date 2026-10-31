@@ -137,3 +137,15 @@ impl<'a> Decoding<'a> {
         self.scaleproduct = scaleproduct;
     }
 }
+
+// The striped decoding carries one f32 scale product across the rows. It overflows when a unilocal
+// model meets a multidomain target, and C hmmalign then fails over to the generic routines.
+pub fn decoding_overflows(fwd: &ProbMx, bck: &ProbMx) -> bool {
+    let mut product = 1.0 / bck.xmx[PXN];
+    if bck.has_own_scales {
+        for i in 1..=fwd.l {
+            product *= fwd.row_scale[i] / bck.row_scale[i];
+        }
+    }
+    !product.is_finite()
+}

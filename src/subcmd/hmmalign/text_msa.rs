@@ -6,8 +6,8 @@ pub(crate) fn build_text_msa(
     bg: &Bg,
     sequences: &[Sequence],
     trim: bool,
-) -> TextMsa {
-    let traces = align_traces(hmm, abc, bg, sequences);
+) -> Result<TextMsa, Unalignable> {
+    let traces = align_traces(hmm, abc, bg, sequences)?;
 
     let (inscount, matuse, matmap, alen) = map_new_msa(hmm.m, &traces, trim);
     let mut rows = Vec::with_capacity(sequences.len());
@@ -54,11 +54,11 @@ pub(crate) fn build_text_msa(
         }
     }
 
-    TextMsa {
+    Ok(TextMsa {
         rows,
         rfline: String::from_utf8(rfline).unwrap(),
         pp_cons,
-    }
+    })
 }
 
 /// Variant of `build_text_msa` that also folds in a previously built `--mapali`
@@ -72,7 +72,7 @@ pub(super) fn build_text_msa_with_mapali(
     sequences: &[Sequence],
     mapped: &msa::Msa,
     trim: bool,
-) -> TextMsa {
+) -> Result<TextMsa, Unalignable> {
     if hmm.flags & tongs::hmm::P7H_CHKSUM == 0 {
         eprintln!("HMM has no checksum. --mapali unreliable without it.");
         std::process::exit(1);
@@ -89,7 +89,7 @@ pub(super) fn build_text_msa_with_mapali(
 
     let map = hmm.map.as_ref().unwrap();
     let mapped_pairs = faux_from_mapped_msa(mapped, map, abc, hmm.m);
-    let traces = align_traces(hmm, abc, bg, sequences);
+    let traces = align_traces(hmm, abc, bg, sequences)?;
 
     let mut all_traces = Vec::with_capacity(mapped_pairs.len() + traces.len());
     all_traces.extend(mapped_pairs.iter().map(|(_, tr)| (tr.clone(), Vec::new())));
@@ -156,7 +156,7 @@ pub(super) fn build_text_msa_with_mapali(
     if trim {
         trim_terminal_residueless_columns(&mut msa);
     }
-    msa
+    Ok(msa)
 }
 
 fn faux_from_mapped_msa(
