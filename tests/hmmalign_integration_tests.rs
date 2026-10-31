@@ -962,3 +962,58 @@ ecori_query         GAATTC
     assert_eq!(String::from_utf8(output.stdout).unwrap(), expected_stdout);
     assert_eq!(String::from_utf8(output.stderr).unwrap(), "");
 }
+
+const GLOBIN: &str =
+    "VLSPADKTNVKAAWGKVGAHAGEYGAEALERMFLSFPTTKTYFPHFDLSHGSAQVKGHGKKVADALTNAVAHVDDMPNALSALSDLHAHKL";
+
+#[test]
+fn hmmalign_gives_an_empty_sequence_a_gap_row_like_bundled_c() {
+    let dir = tempfile::tempdir().unwrap();
+    let query = dir.path().join("empty.fa");
+    std::fs::write(&query, format!(">ok\n{GLOBIN}\n>empty\n\n")).unwrap();
+    let hmm = test_path("hmmer/tutorial/globins4.hmm");
+    let args = ["--outformat", "A2M"];
+    let rust = run_hmmalign_command(&hmm, query.to_str().unwrap(), &args);
+    let c = run_c_hmmalign_command(&hmm, query.to_str().unwrap(), &args);
+
+    assert_eq!(
+        String::from_utf8(rust.stdout).unwrap(),
+        String::from_utf8(c.stdout).unwrap()
+    );
+}
+
+#[test]
+fn hmmalign_refuses_a_sequence_with_no_path_without_panicking() {
+    let dir = tempfile::tempdir().unwrap();
+    let query = dir.path().join("stops.fa");
+    std::fs::write(&query, format!(">ok\n{GLOBIN}\n>stops\n**********\n")).unwrap();
+    let output = Command::new(binary_path("tongs"))
+        .args([
+            "align",
+            &test_path("hmmer/tutorial/globins4.hmm"),
+            query.to_str().unwrap(),
+        ])
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(1));
+    assert!(String::from_utf8(output.stderr)
+        .unwrap()
+        .contains("stops has no path"));
+}
+
+#[test]
+fn hmmalign_matches_bundled_c_when_a_second_domain_overflows_decoding() {
+    let consensus = "LLLYGPPGTGKTLLAKAVAKELGAEFVEISGSELVSKYVGESEKKLRELFEEAKKKAPSVIFIDEIDALAKKRSSSESEESERVVNALLTELDGFKSKESKVIVIAATNRPDKLDPALLRGRFDRRIEVPL";
+    let dir = tempfile::tempdir().unwrap();
+    let query = dir.path().join("two_domains.fa");
+    std::fs::write(&query, format!(">two\n{consensus}{consensus}\n")).unwrap();
+    let hmm = test_path("test_data/AAA_pfam.hmm");
+    let rust = run_hmmalign_command(&hmm, query.to_str().unwrap(), &[]);
+    let c = run_c_hmmalign_command(&hmm, query.to_str().unwrap(), &[]);
+
+    assert_eq!(
+        String::from_utf8(rust.stdout).unwrap(),
+        String::from_utf8(c.stdout).unwrap()
+    );
+}
