@@ -1,6 +1,6 @@
 [package]
 name = "tongs"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2021"
 description = "A fast Rust HMMER 3.4, forked from hmmer-pure-rs"
 license = "BSD-3-Clause"
